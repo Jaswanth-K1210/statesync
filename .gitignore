@@ -7,3 +7,9 @@ __pycache__/
 .DS_Store
 *.egg-info/
 eval/results/tmp/
+
+# Secrets — never committed. Keys live in the environment, not the repo.
+.env
+.env.*
+!.env.example
+*.pem
