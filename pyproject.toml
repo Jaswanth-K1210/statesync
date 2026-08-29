@@ -36,7 +36,7 @@ markers = [
 
 [tool.ruff]
 line-length = 100
-src = ["src", "tests"]
+src = ["src", "tests", "eval"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "T20"]
@@ -44,5 +44,5 @@ select = ["E", "F", "I", "UP", "B", "T20"]
 [tool.mypy]
 python_version = "3.11"
 strict = true
-packages = ["statesync"]
-mypy_path = "src"
+packages = ["statesync", "eval"]
+mypy_path = "src:."

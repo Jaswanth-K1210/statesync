@@ -8,7 +8,8 @@ from pathlib import Path
 
 __all__ = [
     "ADMIN_DSN", "APP_DSN", "BASE_TIME", "CACHE_DIR", "LEASE_SECONDS",
-    "MIGRATIONS_DIR", "PROJECT_ROOT", "REDIS_URL", "SEED", "STALENESS_WINDOW", "STRICT",
+    "MIGRATIONS_DIR", "ORDER_TIMEOUT", "PROJECT_ROOT", "REDIS_URL", "SEED",
+    "STALENESS_WINDOW", "STRICT",
 ]
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -48,3 +49,10 @@ else. UPDATE and DELETE are not granted, so the audit trail is append-only by
 permission rather than by good intentions."""
 
 REDIS_URL = os.getenv("STATESYNC_REDIS_URL", "redis://localhost:56379/0")
+
+ORDER_TIMEOUT = timedelta(hours=1)
+"""An order whose payment has not captured within this is ORDER_NO_CAPTURE.
+
+Distinct from STALENESS_WINDOW: that one gates *terminal* payments, and an
+abandoned order's payment never reaches a terminal state at all, so it would
+otherwise never become eligible for reconciliation."""

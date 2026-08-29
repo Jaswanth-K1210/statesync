@@ -1,0 +1,192 @@
+"""The three measurement arms.
+
+    none    no detection at all — the divergences a merchant lives with today
+    rules   deterministic set operations, no LLM
+    full    rules + propose-verify for ambiguous attribution   (Phase 5)
+
+Expect arms 2 and 3 to tie on clean cases. Four of six classes are set
+operations and a language model will not beat a set operation at being one.
+That is stated here, in the README, and in the video — before a reviewer says
+it first. The propose-verify layer is judged on Phase 4's hard cases.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from datetime import timedelta
+from pathlib import Path
+from typing import Any, Literal
+
+from statesync.classifier.deterministic import classify
+from statesync.config import BASE_TIME, SEED, STALENESS_WINDOW
+from statesync.generator.synthetic import generate_batch
+from statesync.injector.clean import inject_clean
+from statesync.ledger.chain import Ledger
+from statesync.metrics.throughput import Stopwatch, ThroughputReport
+from statesync.models.domain import Divergence
+from statesync.models.enums import DivergenceClass
+from statesync.reconciler.invariants import check_ledger_invariant
+from statesync.reconciler.staleness import ConfirmationTracker
+from statesync.reconciler.three_way import build_index, reconcile_payment
+from statesync.reporting.exceptions_csv import write_exceptions_csv
+
+__all__ = ["ARMS", "ArmResult", "run_arm"]
+
+ARMS: tuple[str, ...] = ("none", "rules", "full")
+
+# Reconciliation happens well after the generated window, so nothing is inside
+# the staleness window for reasons of the clock rather than reasons of state.
+_RECONCILED_AT = BASE_TIME + timedelta(days=30)
+
+
+@dataclass(frozen=True)
+class ArmResult:
+    arm: str
+    records: int
+    injected: int
+    detected: int
+    misclassified: int
+    false_positives: int
+    confirmed: int
+    transient_filtered: int
+    exceptions_count: int
+    llm_calls: int
+    ledger_entries: int
+    chain_ok: bool
+    invariant_ok: bool
+    invariant_delta_paise: int
+    throughput: ThroughputReport
+    per_class: dict[DivergenceClass, dict[str, int]] = field(default_factory=dict)
+
+    @property
+    def missed(self) -> int:
+        return self.injected - self.detected
+
+    @property
+    def match_rate(self) -> float:
+        """Correctly detected *and* correctly classified, over injected."""
+        if self.injected == 0:
+            return 0.0
+        return (self.detected - self.misclassified) / self.injected
+
+    def as_event(self) -> dict[str, Any]:
+        """The deterministic record of this arm — integers and strings only,
+        safe to write to the ledger.
+
+        Timing is deliberately excluded. Two runs of one seed must produce
+        identical metrics, and wall-clock duration never will; it is reported
+        separately via `throughput.as_event()` for exactly that reason. This
+        is the same carve-out the plan makes for timestamps.
+        """
+        return {
+            "arm": self.arm,
+            "records": self.records,
+            "injected": self.injected,
+            "detected": self.detected,
+            "misclassified": self.misclassified,
+            "false_positives": self.false_positives,
+            "confirmed": self.confirmed,
+            "transient_filtered": self.transient_filtered,
+            "exceptions_count": self.exceptions_count,
+            "llm_calls": self.llm_calls,
+            "ledger_entries": self.ledger_entries,
+            "chain_ok": self.chain_ok,
+            "invariant_ok": self.invariant_ok,
+            "invariant_delta_paise": self.invariant_delta_paise,
+            "per_class": {k.value: v for k, v in sorted(self.per_class.items())},
+        }
+
+
+def run_arm(
+    arm: Literal["none", "rules", "full"] | str,
+    seed: int = SEED,
+    n: int = 500,
+    rate: float = 0.25,
+    passes: int = 2,
+    exceptions_path: Path | None = None,
+) -> ArmResult:
+    """Run one arm over a freshly generated, freshly injected batch."""
+    if arm not in ARMS:
+        raise ValueError(f"unknown arm {arm!r}; expected one of {ARMS}")
+    if arm == "full":
+        raise NotImplementedError(
+            "arm 'full' needs the propose-verify layer, which lands in Phase 5"
+        )
+
+    injected = inject_clean(generate_batch(seed=seed, n=n), seed=seed, rate=rate)
+    invariant = check_ledger_invariant(injected.batch)
+    truth = injected.truth
+    ledger = Ledger(clock=lambda: _RECONCILED_AT)
+    tracker = ConfirmationTracker(ledger=ledger)
+
+    watch = Stopwatch()
+    detected_keys: set[str] = set()
+    misclassified = 0
+    confirmed_total = 0
+    unresolved: list[Divergence] = []
+
+    for pass_no in range(passes):
+        now = _RECONCILED_AT + STALENESS_WINDOW * 2 * pass_no
+        index = build_index(injected.batch)
+        found: list[Divergence] = []
+
+        # Timed per record, not per batch. A batch-level figure hides a long
+        # tail, and p50/p99 per record is the number that shows one. Arm 1
+        # walks the same records and does nothing, so the comparison between
+        # "no detection" and "rules" is like for like.
+        for payment in injected.batch.payments:
+            with watch.record():
+                if arm == "none":
+                    continue
+                for divergence in reconcile_payment(payment, index, now):
+                    found.append(divergence)
+                    classify(divergence)
+
+        for divergence in found:
+            key = divergence.deterministic_key()
+            if pass_no == 0:
+                detected_keys.add(key)
+                result = classify(divergence)
+                if key in truth and truth[key] != result.klass:
+                    misclassified += 1
+                if result.resolved_by != "rules":
+                    unresolved.append(divergence)
+
+        confirmed_total += len(tracker.observe(found, now=now))
+
+    # The honest exception list: everything the pipeline could not settle.
+    # On a clean-only batch this is legitimately empty — the four clean classes
+    # are exact set operations. Phase 4's ambiguous cases are what populate it,
+    # and manufacturing rows before then would be inventing exceptions.
+    exceptions = unresolved
+    count = (
+        write_exceptions_csv(exceptions_path, exceptions)
+        if exceptions_path is not None
+        else len(exceptions)
+    )
+
+    per_class: dict[DivergenceClass, dict[str, int]] = {}
+    for key, klass in truth.items():
+        stats = per_class.setdefault(klass, {"injected": 0, "detected": 0})
+        stats["injected"] += 1
+        if key in detected_keys:
+            stats["detected"] += 1
+
+    return ArmResult(
+        arm=arm,
+        records=n,
+        injected=len(truth),
+        detected=len(detected_keys & set(truth)),
+        misclassified=misclassified,
+        false_positives=len(detected_keys - set(truth)),
+        confirmed=confirmed_total,
+        transient_filtered=tracker.transient_filtered,
+        exceptions_count=count,
+        llm_calls=0,
+        ledger_entries=len(ledger.entries),
+        chain_ok=ledger.verify()[0],
+        invariant_ok=invariant.ok,
+        invariant_delta_paise=invariant.delta_paise,
+        throughput=watch.report(),
+        per_class=per_class,
+    )

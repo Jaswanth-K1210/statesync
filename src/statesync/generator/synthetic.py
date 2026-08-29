@@ -86,15 +86,19 @@ def generate_batch(seed: int = SEED, n: int = 500) -> Batch:
         created = BASE_TIME + timedelta(seconds=rng.randrange(0, 14 * 24 * 3600))
         captured_at = created + timedelta(seconds=rng.randrange(5, 900))
 
+        # No AUTHORIZED payments in a clean batch. An order whose payment is
+        # authorized-but-never-captured is not agreement between the three
+        # views — it *is* ORDER_NO_CAPTURE. Emitting it here would mean the
+        # baseline shipped with real divergences the injector never recorded,
+        # and every false-positive number would be wrong. The injector creates
+        # that state deliberately, and Phase 4 covers in-flight races.
         roll = rng.random()
-        if roll < 0.80:
+        if roll < 0.86:
             status = PaymentStatus.CAPTURED
-        elif roll < 0.88:
-            status = PaymentStatus.REFUNDED
         elif roll < 0.94:
-            status = PaymentStatus.FAILED
+            status = PaymentStatus.REFUNDED
         else:
-            status = PaymentStatus.AUTHORIZED
+            status = PaymentStatus.FAILED
 
         # Fee data is present on most payments but not all. Where it is absent
         # Phase 5 must fall back to the schedule, or escalate — never guess.
@@ -124,7 +128,6 @@ def generate_batch(seed: int = SEED, n: int = 500) -> Batch:
             PaymentStatus.CAPTURED: "confirmed",
             PaymentStatus.REFUNDED: "confirmed",
             PaymentStatus.FAILED: "cancelled",
-            PaymentStatus.AUTHORIZED: "pending",
         }[status]
         orders.append(
             Order(

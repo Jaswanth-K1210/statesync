@@ -1,0 +1,40 @@
+{
+  "arm": "none",
+  "chain_ok": true,
+  "confirmed": 0,
+  "detected": 0,
+  "exceptions_count": 0,
+  "false_positives": 0,
+  "injected": 124,
+  "invariant_delta_paise": -11502600,
+  "invariant_ok": false,
+  "ledger_entries": 0,
+  "llm_calls": 0,
+  "misclassified": 0,
+  "per_class": {
+    "captured_no_order": {
+      "detected": 0,
+      "injected": 31
+    },
+    "duplicate_order": {
+      "detected": 0,
+      "injected": 31
+    },
+    "order_no_capture": {
+      "detected": 0,
+      "injected": 31
+    },
+    "refund_not_reflected": {
+      "detected": 0,
+      "injected": 31
+    }
+  },
+  "records": 500,
+  "throughput": {
+    "p50_us": 0,
+    "p99_us": 0,
+    "records": 1000,
+    "wall_clock_us": 3147
+  },
+  "transient_filtered": 0
+}

@@ -112,3 +112,14 @@ def test_small_batches_are_well_formed(n):
     batch = generate_batch(seed=SEED, n=n)
     assert isinstance(batch, Batch)
     assert len(batch.payments) == n
+
+
+def test_clean_batch_contains_no_in_flight_payments():
+    """An authorized-but-uncaptured payment with an order IS a divergence.
+
+    Emitting one in the baseline would mean the batch ships with divergences
+    the injector never recorded, making every false-positive number wrong.
+    """
+    statuses = {p.status for p in generate_batch(seed=SEED, n=500).payments}
+    assert PaymentStatus.AUTHORIZED not in statuses
+    assert PaymentStatus.CREATED not in statuses

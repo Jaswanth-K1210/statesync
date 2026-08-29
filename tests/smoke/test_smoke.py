@@ -8,7 +8,7 @@ Rungs are added one per phase and the total budget never moves:
 
     S0 infra        Phase 1   4s
     S1 chain        Phase 1   2s
-    S2 loop         Phase 2   8s     <- not yet built
+    S2 loop         Phase 2   8s
     S3 idempotency  Phase 3   5s
     S4 refusal      Phase 4   3s
     S5 degradation  Phase 5   3s
@@ -23,7 +23,7 @@ import psycopg
 import pytest
 import redis
 
-from statesync.config import ADMIN_DSN, APP_DSN, REDIS_URL
+from statesync.config import ADMIN_DSN, APP_DSN, REDIS_URL, SEED
 from statesync.ledger.chain import GENESIS, Ledger
 from statesync.ledger.store import LedgerStore, apply_migrations
 
@@ -90,3 +90,57 @@ def test_s1_tampering_is_detected_at_the_right_index(clean_ledger):
 
     ok, idx = clean_ledger.verify()
     assert not ok and idx == 1
+
+
+# ── S2 · the loop, end to end ───────────────────────────────────────────────
+
+def test_s2_fifty_record_batch_runs_end_to_end(tmp_path):
+    """The whole submission in miniature: generate, inject, reconcile,
+    classify, confirm, report — on real data, in about a second."""
+    from eval.arms import run_arm
+
+    result = run_arm("rules", seed=SEED, n=50, rate=0.25,
+                     exceptions_path=tmp_path / "exceptions.csv")
+
+    assert result.records == 50
+    assert result.injected > 0, "the injector should have broken something"
+    assert 0.0 < result.match_rate <= 1.0
+    assert result.false_positives == 0
+
+
+def test_s2_every_injected_class_is_detected(tmp_path):
+    from eval.arms import run_arm
+
+    result = run_arm("rules", seed=SEED, n=50, rate=0.25)
+    assert result.per_class, "per-class detection must be reported, not just a headline"
+    for klass, stats in result.per_class.items():
+        assert stats["detected"] == stats["injected"], f"{klass.value} under-detected"
+
+
+def test_s2_throughput_is_measured(tmp_path):
+    """Throughput is the first word of the published bar."""
+    from eval.arms import run_arm
+
+    throughput = run_arm("rules", seed=SEED, n=50, rate=0.25).throughput
+    assert throughput.records_per_sec > 0
+    assert throughput.wall_clock_us > 0
+
+
+def test_s2_exceptions_csv_is_written_with_a_reason_code_column(tmp_path):
+    from eval.arms import run_arm
+
+    from statesync.reporting.exceptions_csv import EXCEPTION_COLUMNS
+
+    path = tmp_path / "exceptions.csv"
+    run_arm("rules", seed=SEED, n=50, rate=0.25, exceptions_path=path)
+    assert path.exists()
+    assert path.read_text().splitlines()[0] == ",".join(EXCEPTION_COLUMNS)
+    assert "reason_code" in EXCEPTION_COLUMNS
+
+
+def test_s2_the_run_leaves_a_verifiable_chain(tmp_path):
+    from eval.arms import run_arm
+
+    result = run_arm("rules", seed=SEED, n=50, rate=0.25)
+    assert result.chain_ok is True
+    assert result.ledger_entries > 0

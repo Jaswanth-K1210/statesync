@@ -64,14 +64,14 @@ verify: lint test-unit test-int smoke determinism  ## green before any commit to
 	@echo "verify: green"
 
 lint:  ## ruff + mypy --strict
-	$(PY) -m ruff check src tests
+	$(PY) -m ruff check src tests eval
 	$(PY) -m mypy
 
-eval:  ## the 3-arm measurement run (Phase 2)
-	@echo "eval: arms 1-2 land in Phase 2, arm 3 in Phase 5."
+eval:  ## the 3-arm measurement run, regenerates README numbers
+	$(PY) -m eval.harness --seed $(SEED) --n 500
 
-eval-arm:  ## a single arm, e.g. make eval-arm ARM=rules (Phase 2)
-	@echo "eval-arm: Phase 2."
+eval-arm:  ## a single arm, e.g. make eval-arm ARM=rules
+	$(PY) -m eval.harness --seed $(SEED) --n 500 --arm $(ARM)
 
 demo:  ## the exact video sequence (Phase 7)
 	@echo "demo: Phase 7."
