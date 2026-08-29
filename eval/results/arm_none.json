@@ -6,6 +6,7 @@
   "exceptions_count": 0,
   "false_positives": 0,
   "injected": 124,
+  "inspections": 1000,
   "invariant_delta_paise": -11502600,
   "invariant_ok": false,
   "ledger_entries": 0,
@@ -30,11 +31,12 @@
     }
   },
   "records": 500,
+  "storage": "in-memory",
   "throughput": {
     "p50_us": 0,
     "p99_us": 0,
     "records": 1000,
-    "wall_clock_us": 3147
+    "wall_clock_us": 2821
   },
   "transient_filtered": 0
 }

@@ -1,1 +1,2 @@
+# 0 exceptions of 124 divergences detected (arm=rules, seed=20260905, clean-only batch)
 divergence_key,class,reason_code,payment_id,order_id,amount_paise,observed_at,detail

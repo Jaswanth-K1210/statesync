@@ -56,7 +56,33 @@ class ArmResult:
     invariant_ok: bool
     invariant_delta_paise: int
     throughput: ThroughputReport
+    storage: str = "in-memory"
+    """What the throughput figure was measured against.
+
+    The reconciler runs over in-memory views, so rec/s measures detection and
+    classification rather than database I/O. That is a real number for a real
+    component, but a reviewer will assume it includes I/O unless told, so the
+    label travels with the result instead of living in a comment.
+    """
     per_class: dict[DivergenceClass, dict[str, int]] = field(default_factory=dict)
+
+    @property
+    def inspections(self) -> int:
+        """Per-record inspections. Two-run confirmation looks at every record
+        once per pass, so this is `records * passes`."""
+        return self.throughput.records
+
+    @property
+    def records_per_sec(self) -> float:
+        """Business rate: distinct records reconciled per second."""
+        if self.throughput.wall_clock_us == 0:
+            return 0.0
+        return self.records * 1_000_000 / self.throughput.wall_clock_us
+
+    @property
+    def inspections_per_sec(self) -> float:
+        """Work rate: per-record inspections per second."""
+        return self.throughput.records_per_sec
 
     @property
     def missed(self) -> int:
@@ -92,6 +118,8 @@ class ArmResult:
             "ledger_entries": self.ledger_entries,
             "chain_ok": self.chain_ok,
             "invariant_ok": self.invariant_ok,
+            "storage": self.storage,
+            "inspections": self.inspections,
             "invariant_delta_paise": self.invariant_delta_paise,
             "per_class": {k.value: v for k, v in sorted(self.per_class.items())},
         }
@@ -159,8 +187,13 @@ def run_arm(
     # are exact set operations. Phase 4's ambiguous cases are what populate it,
     # and manufacturing rows before then would be inventing exceptions.
     exceptions = unresolved
+    detected_count = len(detected_keys & set(truth))
     count = (
-        write_exceptions_csv(exceptions_path, exceptions)
+        write_exceptions_csv(
+            exceptions_path, exceptions,
+            detected=detected_count,
+            context=f"arm={arm}, seed={seed}, clean-only batch",
+        )
         if exceptions_path is not None
         else len(exceptions)
     )

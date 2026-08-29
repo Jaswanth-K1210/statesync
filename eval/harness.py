@@ -27,7 +27,7 @@ def _pct(value: float) -> str:
     return f"{value * 100:.1f}%"
 
 
-def render(results: list[ArmResult]) -> str:
+def render(results: list[ArmResult], include_timing: bool = True) -> str:
     """A fixed template populated from measured values. No prose is generated
     and no figure here comes from anywhere but the run itself."""
     lines: list[str] = []
@@ -39,13 +39,24 @@ def render(results: list[ArmResult]) -> str:
     w(f"  seed {SEED}  ·  {results[0].records} records  ·  "
       f"{results[0].injected} injected divergences")
     w("")
-    w(f"  {'arm':<8}{'match':>9}{'detected':>11}{'missed':>9}{'false+':>9}"
-      f"{'rec/s':>11}{'p50 µs':>10}{'p99 µs':>10}{'LLM':>6}")
-    w("  " + "-" * 74)
+    # Timing is this report's "timestamp": inherently variable between runs.
+    # `include_timing=False` renders the deterministic half, which is what the
+    # reproducibility test diffs.
+    timing_head = f"{'rec/s':>10}{'insp/s':>10}{'p50 µs':>9}{'p99 µs':>9}" if include_timing else ""
+    w(f"  {'arm':<8}{'match':>8}{'detect':>8}{'miss':>6}{'false+':>8}"
+      f"{'records':>9}{'insp':>7}{timing_head}{'LLM':>5}")
+    w("  " + "-" * (60 + (38 if include_timing else 0)))
     for r in results:
-        w(f"  {r.arm:<8}{_pct(r.match_rate):>9}{r.detected:>11}{r.missed:>9}"
-          f"{r.false_positives:>9}{r.throughput.records_per_sec:>11,.0f}"
-          f"{r.throughput.p50_us:>10,}{r.throughput.p99_us:>10,}{r.llm_calls:>6}")
+        timing = (
+            f"{r.records_per_sec:>10,.0f}{r.inspections_per_sec:>10,.0f}"
+            f"{r.throughput.p50_us:>9,}{r.throughput.p99_us:>9,}"
+        ) if include_timing else ""
+        w(f"  {r.arm:<8}{_pct(r.match_rate):>8}{r.detected:>8}{r.missed:>6}"
+          f"{r.false_positives:>8}{r.records:>9}{r.inspections:>7}{timing}{r.llm_calls:>5}")
+    w("")
+    w("  Two-run confirmation inspects every record twice; this is the measured cost")
+    w(f"  of not repairing in-flight payments. Measured {results[0].storage} — rec/s is")
+    w("  the reconciler's rate and does not include database I/O.")
     w("")
 
     rules = next((r for r in results if r.arm == "rules"), None)
@@ -72,9 +83,14 @@ def render(results: list[ArmResult]) -> str:
         w(f"  {'transient divergences filtered':<44}{rules.transient_filtered:>14,}")
         w(f"  {'unresolved exceptions':<44}{rules.exceptions_count:>14,}")
         w("")
-        w("  Four of six classes are set operations. Rules resolve them exactly, and")
-        w("  a language model would not beat a set operation at being a set operation.")
-        w("  The propose-verify layer is judged on the hard cases, in Phase 4-5.")
+        w("  Reading the match rate")
+        w("  " + "-" * 74)
+        w("  Four of these classes are exact set operations. 100% is the expected floor,")
+        w("  not an achievement — if a set difference failed to find a set difference,")
+        w("  that would be a bug. Measurement that means anything starts with the")
+        w("  ambiguous cases (AMOUNT_MISMATCH, SETTLEMENT_GAP) in Phase 4-5, where the")
+        w("  propose-verify layer is judged and where escalation is often the correct")
+        w("  answer rather than a miss.")
         w("")
     return "\n".join(lines)
 

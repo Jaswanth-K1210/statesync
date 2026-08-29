@@ -34,17 +34,30 @@ def write_exceptions_csv(
     path: Path,
     divergences: list[Divergence],
     reasons: dict[str, ReasonCode] | None = None,
+    detected: int | None = None,
+    context: str = "",
 ) -> int:
     """Write every unresolved divergence. Returns the row count.
 
     An empty run still writes the header — an empty file and a missing file
     mean different things, and only one of them means "nothing was left over".
+
+    The file opens with a `#` summary line so it is self-describing. A
+    zero-row file reads as a bug to anyone who does not have the test suite
+    open; one that says "0 exceptions of 124 divergences detected" reads as
+    the result it is. The line restates measured counts and makes no new claim.
     """
     reasons = reasons or {}
     path.parent.mkdir(parents=True, exist_ok=True)
     rows = sorted(divergences, key=lambda d: d.deterministic_key())
 
+    total = detected if detected is not None else len(rows)
+    summary = f"# {len(rows)} exceptions of {total} divergences detected"
+    if context:
+        summary += f" ({context})"
+
     with path.open("w", newline="", encoding="utf-8") as fh:
+        fh.write(summary + "\n")
         writer = csv.DictWriter(fh, fieldnames=EXCEPTION_COLUMNS, lineterminator="\n")
         writer.writeheader()
         for divergence in rows:

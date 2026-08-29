@@ -129,7 +129,7 @@ def test_exceptions_csv_is_written_with_a_header(tmp_path):
     path = tmp_path / "exceptions.csv"
     result = run_arm("rules", seed=SEED, n=500, rate=0.25, exceptions_path=path)
     assert path.exists()
-    assert path.read_text().count("\n") == result.exceptions_count + 1
+    assert path.read_text().count("\n") == result.exceptions_count + 2  # summary + header
 
 
 def test_a_clean_only_batch_legitimately_has_zero_exceptions(tmp_path):
@@ -194,3 +194,52 @@ def test_the_invariant_holds_when_nothing_is_injected():
 
 def test_invariant_delta_is_integer_paise(rules):
     assert isinstance(rules.invariant_delta_paise, int)
+
+
+# ── reproducibility, verified rather than asserted ──────────────────────────
+
+def test_two_eval_runs_produce_identical_output():
+    """The guarantee the whole demo rests on, run rather than described.
+
+    Not "as_event() excludes timing" — that is the mechanism. This actually
+    runs the eval twice and diffs the rendered report.
+    """
+    from eval.harness import render
+
+    def report() -> str:
+        results = [run_arm(a, seed=SEED, n=300, rate=0.25) for a in ("none", "rules")]
+        return render(results, include_timing=False)
+
+    first, second = report(), report()
+    assert first == second, "the eval is not reproducible at a fixed seed"
+    assert "100.0%" in first, "sanity: the report should contain real numbers"
+
+
+def test_two_runs_agree_on_every_per_class_figure():
+    a = run_arm("rules", seed=SEED, n=300, rate=0.25)
+    b = run_arm("rules", seed=SEED, n=300, rate=0.25)
+    assert a.per_class == b.per_class
+
+
+# ── what the throughput figure actually measures ────────────────────────────
+
+def test_the_eval_runs_in_memory_and_says_so(rules):
+    """The reconciler is measured without database I/O.
+
+    That is a legitimate thing to measure — it is the classifier's rate — but
+    a reviewer will assume rec/s includes I/O unless told. This test pins the
+    claim so the label cannot drift away from the truth.
+    """
+    assert rules.storage == "in-memory"
+
+
+def test_both_throughput_numbers_are_reported(rules):
+    """rec/s and insp/s differ by exactly the confirmation passes.
+
+    Reporting only inspections deflates by 2x; reporting only records inflates
+    by 2x. Both are shown, with the tradeoff stated.
+    """
+    assert rules.records == 500
+    assert rules.inspections == 1000
+    assert rules.inspections_per_sec > rules.records_per_sec
+    assert abs(rules.inspections_per_sec / rules.records_per_sec - 2.0) < 0.01

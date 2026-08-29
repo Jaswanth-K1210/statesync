@@ -21,8 +21,10 @@ def divergence(klass=DivergenceClass.CAPTURED_NO_ORDER, pid="pay_1", amount=4000
 
 
 def read(path):
+    """Skip the leading `#` summary line the way any CSV consumer would."""
     with path.open(newline="", encoding="utf-8") as fh:
-        return list(csv.DictReader(fh))
+        lines = [ln for ln in fh if not ln.startswith("#")]
+    return list(csv.DictReader(lines))
 
 
 def test_writes_one_row_per_exception(tmp_path):
@@ -72,7 +74,7 @@ def test_an_empty_run_still_writes_a_header(tmp_path):
     """An empty file and a missing file mean different things."""
     path = tmp_path / "exceptions.csv"
     assert write_exceptions_csv(path, []) == 0
-    assert path.read_text().strip() == ",".join(EXCEPTION_COLUMNS)
+    assert path.read_text().splitlines()[1] == ",".join(EXCEPTION_COLUMNS)
 
 
 def test_timestamps_are_iso8601_utc(tmp_path):
@@ -86,3 +88,25 @@ def test_writing_twice_produces_an_identical_file(tmp_path):
     write_exceptions_csv(a, [divergence(pid="pay_1"), divergence(pid="pay_2")])
     write_exceptions_csv(b, [divergence(pid="pay_1"), divergence(pid="pay_2")])
     assert a.read_bytes() == b.read_bytes()
+
+
+def test_file_describes_itself_so_empty_does_not_read_as_broken(tmp_path):
+    """A header-only file looks like a bug to anyone without the test open."""
+    path = tmp_path / "exceptions.csv"
+    write_exceptions_csv(path, [], detected=124, context="arm=rules, clean-only batch")
+    first = path.read_text().splitlines()[0]
+    assert first.startswith("#")
+    assert "0 exceptions" in first and "124 divergences" in first
+    assert "arm=rules" in first
+
+
+def test_the_comment_line_is_not_mistaken_for_data(tmp_path):
+    path = tmp_path / "exceptions.csv"
+    write_exceptions_csv(path, [divergence()], detected=124)
+    assert len(read(path)) == 1
+
+
+def test_summary_counts_reflect_actual_rows(tmp_path):
+    path = tmp_path / "exceptions.csv"
+    write_exceptions_csv(path, [divergence(pid="a"), divergence(pid="b")], detected=10)
+    assert "2 exceptions of 10 divergences" in path.read_text().splitlines()[0]

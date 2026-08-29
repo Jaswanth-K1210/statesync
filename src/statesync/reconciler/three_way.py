@@ -72,11 +72,21 @@ def reconcile_payment(
     orders = index.orders_by_payment.get(pid, [])
 
     # ORDER_NO_CAPTURE — the order exists but money never moved. Gated on the
-    # order's age, not the staleness window: an abandoned payment never reaches
-    # a terminal state, so it would otherwise never become eligible at all.
+    # order's age rather than the staleness window: an abandoned payment never
+    # reaches a terminal state, so it would otherwise never become eligible.
+    #
+    # The clock runs from the *most recent* evidence of activity, not from the
+    # order alone. An authorised-but-uncaptured payment inside its window is
+    # not a divergence, it is a payment in progress — and a retry authorised
+    # two minutes ago against a six-hour-old order is the same thing. Gating on
+    # order age alone would flag it, which is a false positive on a live
+    # payment: precisely the failure the staleness design exists to prevent.
     if orders and not payment.status.is_terminal:
-        oldest = min(o.created_at for o in orders)
-        if now - oldest > ORDER_TIMEOUT:
+        last_activity = max(
+            min(o.created_at for o in orders),
+            payment.status_changed_at,
+        )
+        if now - last_activity > ORDER_TIMEOUT:
             found.append(
                 _divergence(DivergenceClass.ORDER_NO_CAPTURE, payment, orders[0].order_id, now)
             )

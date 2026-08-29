@@ -134,7 +134,7 @@ def test_s2_exceptions_csv_is_written_with_a_reason_code_column(tmp_path):
     path = tmp_path / "exceptions.csv"
     run_arm("rules", seed=SEED, n=50, rate=0.25, exceptions_path=path)
     assert path.exists()
-    assert path.read_text().splitlines()[0] == ",".join(EXCEPTION_COLUMNS)
+    assert path.read_text().splitlines()[1] == ",".join(EXCEPTION_COLUMNS)
     assert "reason_code" in EXCEPTION_COLUMNS
 
 

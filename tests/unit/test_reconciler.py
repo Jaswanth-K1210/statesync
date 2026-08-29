@@ -159,3 +159,60 @@ def test_invariant_violation_can_be_raised_for_strict_mode(batch):
                    ledger_entries=batch.ledger_entries[:-1])
     with pytest.raises(LedgerInvariantViolation):
         check_ledger_invariant(broken).raise_if_violated()
+
+
+# ── the authorisation window ────────────────────────────────────────────────
+# An authorised-but-uncaptured payment inside its auth window is not a
+# divergence at all — it is a payment in progress. It becomes ORDER_NO_CAPTURE
+# only once the window has elapsed with no capture.
+
+def _authorized_pair(batch, order_age, auth_age, now):
+    """An order plus an authorised payment, each aged independently."""
+    from statesync.generator.synthetic import Batch as _Batch
+    pid = captured_with_order(batch).payment_id
+    payment = next(p for p in batch.payments if p.payment_id == pid)
+    order = next(o for o in batch.orders if o.payment_id == pid)
+    return _Batch(
+        seed=batch.seed,
+        payments=[payment.model_copy(update={
+            "status": PaymentStatus.AUTHORIZED,
+            "captured_at": None,
+            "status_changed_at": now - auth_age,
+        })],
+        orders=[order.model_copy(update={"created_at": now - order_age})],
+        ledger_entries=[],
+    )
+
+
+def test_authorized_within_auth_window_is_not_order_no_capture(batch):
+    """The normal case: money is authorised and capture is still pending."""
+    now = LATER
+    fresh = _authorized_pair(batch, order_age=timedelta(minutes=5),
+                             auth_age=timedelta(minutes=5), now=now)
+    assert reconcile(fresh, now=now) == []
+
+
+def test_authorized_past_the_window_is_order_no_capture(batch):
+    now = LATER
+    stale = _authorized_pair(batch, order_age=timedelta(hours=6),
+                             auth_age=timedelta(hours=6), now=now)
+    assert [d.klass for d in reconcile(stale, now=now)] == [DivergenceClass.ORDER_NO_CAPTURE]
+
+
+def test_a_recent_authorisation_on_an_old_order_is_not_a_divergence(batch):
+    """A retry: the order is hours old but the payment was authorised just now.
+
+    Gating on the order's age alone would flag this, and it is exactly the
+    false positive the staleness design exists to prevent.
+    """
+    now = LATER
+    retried = _authorized_pair(batch, order_age=timedelta(hours=6),
+                               auth_age=timedelta(minutes=3), now=now)
+    assert reconcile(retried, now=now) == []
+
+
+def test_the_window_boundary_is_exclusive(batch):
+    from statesync.config import ORDER_TIMEOUT
+    now = LATER
+    exact = _authorized_pair(batch, order_age=ORDER_TIMEOUT, auth_age=ORDER_TIMEOUT, now=now)
+    assert reconcile(exact, now=now) == []
