@@ -37,7 +37,7 @@
     "p50_us": 0,
     "p99_us": 0,
     "records": 1000,
-    "wall_clock_us": 3388
+    "wall_clock_us": 3554
   },
   "transient_filtered": 0
 }

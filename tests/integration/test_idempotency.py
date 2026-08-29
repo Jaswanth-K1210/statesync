@@ -234,3 +234,74 @@ def test_repair_never_returns_none(rds, store, ledger):
     execute = writing_executor(store)
     assert r.repair(divergence(), execute) is not None
     assert r.repair(divergence(), execute) is not None
+
+
+# ── recovering from a stuck repair ──────────────────────────────────────────
+# Without a recovery path a single crash poisons the divergence key for the
+# whole retention window: every later pass re-escalates the same divergence
+# and the repair can never be retried after a human has looked at it.
+
+def test_a_stuck_repair_re_escalates_until_it_is_cleared(rds, store, ledger):
+    """The failure mode being fixed: escalation repeats, forever, on its own."""
+    repairer(rds, store, ledger).claim(divergence())
+    later = NOW + timedelta(seconds=LEASE_SECONDS + 1)
+    r = repairer(rds, store, ledger, now=later)
+
+    first = r.repair(divergence(), writing_executor(store))
+    second = r.repair(divergence(), writing_executor(store))
+    assert first.reason == second.reason == "STUCK_REPAIR"
+
+
+def test_clearing_a_stuck_repair_permits_exactly_one_fresh_attempt(rds, store, ledger):
+    repairer(rds, store, ledger).claim(divergence())
+    later = NOW + timedelta(seconds=LEASE_SECONDS + 1)
+    r = repairer(rds, store, ledger, now=later)
+    r.repair(divergence(), writing_executor(store))
+
+    assert r.clear_stuck(divergence()) is True
+
+    result = r.repair(divergence(), writing_executor(store))
+    assert result.status == RepairStatus.SUCCEEDED
+    assert store.write_count == 1
+
+
+def test_clearing_is_recorded_in_the_ledger_with_the_operator(rds, store, ledger):
+    """An operator override is exactly the thing an audit trail is for."""
+    repairer(rds, store, ledger).claim(divergence())
+    later = NOW + timedelta(seconds=LEASE_SECONDS + 1)
+    r = repairer(rds, store, ledger, now=later)
+    r.repair(divergence(), writing_executor(store))
+    r.clear_stuck(divergence(), operator="ops@merchant")
+
+    assert ledger.has("STUCK_REPAIR_CLEARED")
+    entry = next(e for e in ledger.entries if e.event_type == "STUCK_REPAIR_CLEARED")
+    assert entry.payload["operator"] == "ops@merchant"
+
+
+def test_clearing_a_repair_that_is_not_stuck_is_refused(rds, store, ledger):
+    """Clearing a live or succeeded repair would re-open a double-repair path."""
+    r = repairer(rds, store, ledger)
+    r.repair(divergence(), writing_executor(store))
+    assert r.clear_stuck(divergence()) is False
+    assert store.write_count == 1
+
+
+def test_clearing_an_unknown_repair_is_refused(rds, store, ledger):
+    assert repairer(rds, store, ledger).clear_stuck(divergence()) is False
+
+
+def test_a_cleared_repair_that_crashes_again_becomes_stuck_again(rds, store, ledger):
+    """Clearing grants one attempt, not permanent immunity."""
+    r0 = repairer(rds, store, ledger)
+    r0.claim(divergence())
+    later = NOW + timedelta(seconds=LEASE_SECONDS + 1)
+    r = repairer(rds, store, ledger, now=later)
+    r.repair(divergence(), writing_executor(store))
+    r.clear_stuck(divergence())
+    r.claim(divergence())  # crashes again
+
+    later_still = later + timedelta(seconds=LEASE_SECONDS + 1)
+    result = repairer(rds, store, ledger, now=later_still).repair(
+        divergence(), writing_executor(store)
+    )
+    assert result.reason == "STUCK_REPAIR"

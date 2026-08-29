@@ -307,3 +307,24 @@ def test_the_blast_radius_cap_is_enforced_in_the_eval():
 def test_repair_counts_are_ledger_safe():
     result = run_arm("rules", seed=SEED, n=100, rate=0.25, passes=2, repair=True)
     canonical(result.as_event())
+
+
+def test_the_three_pass_proof_populates_every_column():
+    """Pass 3 must show DB-dedupes, not blocks.
+
+    The blast-radius cap bounds one run. If it accumulated across runs, pass 3
+    would be entirely blocked and `DB-deduped` would print zero — the number
+    that proves the two-layer claim, sitting empty for the wrong reason.
+    """
+    from eval.arms import make_repair_runner
+
+    runner = make_repair_runner(flush=True)
+    first = run_arm("rules", seed=SEED, n=200, rate=0.25, repair=True, runner=runner)
+    second = run_arm("rules", seed=SEED, n=200, rate=0.25, repair=True, runner=runner)
+    runner.redis.flushall()
+    third = run_arm("rules", seed=SEED, n=200, rate=0.25, repair=True, runner=runner)
+
+    assert second.repairs["replayed"] == first.repairs["succeeded"]
+    assert third.repairs["already_applied"] == first.repairs["succeeded"]
+    assert third.repairs["blocked"] == 0, "pass 3 was blocked, not deduped"
+    assert third.repairs["writes"] == first.repairs["writes"]

@@ -139,3 +139,20 @@ def test_gate_decisions_are_frozen():
 
 def test_gate_decision_type():
     assert isinstance(PolicyGate().evaluate(divergence()), GateDecision)
+
+
+def test_the_cap_resets_between_runs():
+    """The cap bounds one run's blast radius, not a process's lifetime.
+
+    A cap that accumulates across runs silently blocks later runs entirely,
+    which looks identical to "nothing needed repairing" in a report.
+    """
+    cap = BlastRadiusCap(max_repairs=2)
+    cap.allow()
+    cap.allow()
+    assert not cap.allow()
+
+    cap.reset()
+    assert cap.allow()
+    assert cap.used == 1
+    assert cap.blocked == 0

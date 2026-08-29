@@ -18,6 +18,22 @@ timestamp and is retained far longer than the lease it represents. Expiry is
 computed, not delegated to Redis. The test
 `test_the_claim_record_survives_the_lease_so_a_crash_is_detectable` pins this.
 
+**Recovering from a stuck repair.** Detecting a stuck repair is only half the
+job. Because the claim record is retained far beyond the lease, an escalation
+would otherwise repeat on every later pass forever, and the repair could never
+be retried once a human had looked at it — one crash would poison that
+divergence key for the whole retention window. `clear_stuck()` is the
+documented path out: it refuses anything that is not actually stuck, writes
+`STUCK_REPAIR_CLEARED` to the ledger with the operator's name, and grants
+exactly one fresh attempt. Crash again and the divergence becomes stuck again.
+
+**What each layer actually buys.** The DB constraint is the correctness
+guarantee: mutation testing shows that removing the Redis lease entirely does
+*not* produce a double repair, because the constraint catches every duplicate.
+The lease's contribution is avoided wasted work and concurrency behaviour, not
+correctness. Worth stating precisely, because a reviewer running the same
+mutation will reach the same conclusion.
+
 Three properties worth stating in the README:
 
 1. A crash mid-execution surfaces as an escalation, never as silence.
@@ -79,6 +95,7 @@ class RepairResult:
 class _Redis(Protocol):
     def set(self, name: str, value: str, nx: bool = ..., ex: int | None = ...) -> Any: ...
     def get(self, name: str) -> Any: ...
+    def delete(self, *names: str) -> Any: ...
 
 
 def _now() -> datetime:
@@ -111,6 +128,29 @@ class IdempotentRepairer:
         )
         return bool(claimed)
 
+    def clear_stuck(self, divergence: Divergence, operator: str = "unknown") -> bool:
+        """Release a stuck claim so the repair can be attempted once more.
+
+        Refuses anything that is not genuinely stuck — clearing a live or a
+        succeeded repair would re-open the double-repair path this module
+        exists to close. Returns True only if a claim was actually released.
+        """
+        key = self._key(divergence)
+        raw = self.redis.get(key)
+        if raw is None:
+            return False
+
+        record: dict[str, Any] = json.loads(raw)
+        if record.get("state") != "CLAIMED" or not self._lease_expired(record):
+            return False
+
+        self.redis.delete(key)
+        self.ledger.append("STUCK_REPAIR_CLEARED",
+                           divergence_key=divergence.deterministic_key(),
+                           operator=operator,
+                           prior_worker=str(record.get("worker", "unknown")))
+        return True
+
     def _lease_expired(self, record: dict[str, Any]) -> bool:
         claimed_at = datetime.fromisoformat(record["at"])
         return (self.clock() - claimed_at).total_seconds() > self.lease_seconds
@@ -140,7 +180,9 @@ class IdempotentRepairer:
                 return RepairResult(RepairStatus.FAILED, key, reason=record.get("err"),
                                     replayed=True)
 
-            if not record.get("at") or self._lease_expired(record):
+            if record.get("state") == "CLAIMED" and (
+                not record.get("at") or self._lease_expired(record)
+            ):
                 # A previous worker died mid-execution. Never swallow this.
                 self.ledger.append("STUCK_REPAIR_DETECTED", divergence_key=divergence_key,
                                    prior_worker=str(record.get("worker", "unknown")),

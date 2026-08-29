@@ -15,10 +15,10 @@ import argparse
 import json
 from pathlib import Path
 
-from eval.arms import ArmResult, run_arm
+from eval.arms import ArmResult, make_repair_runner, run_arm
 from statesync.config import PROJECT_ROOT, SEED
 
-__all__ = ["main", "render"]
+__all__ = ["main", "render", "render_idempotency"]
 
 RESULTS_DIR = PROJECT_ROOT / "eval" / "results"
 
@@ -106,6 +106,31 @@ def render(results: list[ArmResult], include_timing: bool = True) -> str:
     return "\n".join(lines)
 
 
+def render_idempotency(passes: list[tuple[str, dict[str, int]]]) -> str:
+    """The three-pass idempotency proof, side by side.
+
+    A first run alone prints `deduped by DB constraint: 0` — which is the
+    number that proves the whole two-layer claim, sitting empty. Running all
+    three passes populates every column, so the demo table shows the argument
+    rather than implying it.
+    """
+    lines: list[str] = []
+    w = lines.append
+    w("  Idempotency — the same batch, three times")
+    w("  " + "-" * 74)
+    w(f"  {'pass':<28}{'repaired':>12}{'replayed':>12}{'DB-deduped':>12}{'rows':>10}")
+    for label, counts in passes:
+        w(f"  {label:<28}{counts.get('succeeded', 0):>12,}"
+          f"{counts.get('replayed', 0):>12,}{counts.get('already_applied', 0):>12,}"
+          f"{counts.get('writes', 0):>10,}")
+    w("")
+    w("  Row count is cumulative and must not move after pass 1. Pass 3 wipes")
+    w("  Redis entirely: the database constraint is what holds, and the Redis")
+    w("  lease contributes avoided work rather than correctness.")
+    w("")
+    return "\n".join(lines)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="eval.harness")
     parser.add_argument("--seed", type=int, default=SEED)
@@ -125,6 +150,22 @@ def main(argv: list[str] | None = None) -> int:
     ]
 
     print(render(results))  # noqa: T201
+
+    # The three-pass proof: normal, replay, then FLUSHALL + replay.
+    if not args.arm or args.arm == "rules":
+        runner = make_repair_runner(flush=True)
+        first = run_arm("rules", seed=args.seed, n=args.n, rate=args.rate,
+                        repair=True, runner=runner)
+        second = run_arm("rules", seed=args.seed, n=args.n, rate=args.rate,
+                         repair=True, runner=runner)
+        runner.redis.flushall()
+        third = run_arm("rules", seed=args.seed, n=args.n, rate=args.rate,
+                        repair=True, runner=runner)
+        print(render_idempotency([  # noqa: T201
+            ("1 · first run", first.repairs),
+            ("2 · identical re-run", second.repairs),
+            ("3 · after redis FLUSHALL", third.repairs),
+        ]))
 
     for result in results:
         payload = result.as_event() | {"throughput": result.throughput.as_event()}

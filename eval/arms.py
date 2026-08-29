@@ -158,6 +158,9 @@ def run_arm(
     # twice writes nothing" claim is exercised end to end.
     if repair and runner is None:
         runner = make_repair_runner(blast_radius=blast_radius, flush=True)
+    if runner is not None:
+        # The cap bounds this run, not every run the pipeline has ever seen.
+        runner.cap.reset()
     invariant = check_ledger_invariant(injected.batch)
     truth = injected.truth
     ledger = Ledger(clock=lambda: _RECONCILED_AT)

@@ -24,6 +24,14 @@ class BlastRadiusCap:
         if self.max_repairs < 0:
             raise ValueError(f"max_repairs must be >= 0, got {self.max_repairs}")
 
+    def reset(self) -> None:
+        """Start a new run. The cap bounds one run's blast radius, not the
+        lifetime of the process — a cap that accumulates would silently block
+        every later run, which reads identically to "nothing needed repairing".
+        """
+        self.used = 0
+        self.blocked = 0
+
     def allow(self) -> bool:
         """Consume one repair from the budget. False once it is spent."""
         if self.used >= self.max_repairs:
