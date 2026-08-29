@@ -144,3 +144,78 @@ def test_s2_the_run_leaves_a_verifiable_chain(tmp_path):
     result = run_arm("rules", seed=SEED, n=50, rate=0.25)
     assert result.chain_ok is True
     assert result.ledger_entries > 0
+
+
+# ── S3 · idempotency ────────────────────────────────────────────────────────
+# The two lines that are the argument. Everything else is engineering.
+
+def test_s3_the_same_batch_twice_writes_nothing_the_second_time():
+    from eval.arms import make_repair_runner, run_arm
+
+    runner = make_repair_runner(flush=True)
+    first = run_arm("rules", seed=SEED, n=50, rate=0.25, passes=2,
+                    repair=True, runner=runner)
+    writes = first.repairs["writes"]
+    assert writes > 0, "the first run should have repaired something"
+
+    second = run_arm("rules", seed=SEED, n=50, rate=0.25, passes=2,
+                     repair=True, runner=runner)
+    assert second.repairs["writes"] == writes
+
+
+def test_s3_flushing_redis_still_writes_nothing():
+    """Redis is a cache. The DB constraint is the guarantee."""
+    from eval.arms import make_repair_runner, run_arm
+
+    runner = make_repair_runner(flush=True)
+    first = run_arm("rules", seed=SEED, n=50, rate=0.25, passes=2,
+                    repair=True, runner=runner)
+    writes = first.repairs["writes"]
+
+    runner.redis.flushall()
+
+    second = run_arm("rules", seed=SEED, n=50, rate=0.25, passes=2,
+                     repair=True, runner=runner)
+    assert second.repairs["writes"] == writes
+    assert runner.ledger.has("REPAIR_DEDUPED_BY_DB")
+
+
+def test_s3_a_stuck_repair_escalates_rather_than_going_silent():
+    """A worker that died mid-repair must surface, never return nothing."""
+    from datetime import timedelta
+
+    import redis as redis_lib
+
+    from statesync.config import LEASE_SECONDS
+    from statesync.executor.store import InMemoryRepairStore
+    from statesync.models.domain import Divergence
+    from statesync.models.enums import DivergenceClass
+    from statesync.policy.idempotency import IdempotentRepairer, RepairStatus
+
+    client = redis_lib.Redis.from_url(REDIS_URL, decode_responses=True)
+    client.flushdb()
+    now = datetime(2026, 9, 5, 12, 0, 0, tzinfo=UTC)
+    divergence = Divergence(klass=DivergenceClass.CAPTURED_NO_ORDER, payment_id="pay_stuck",
+                            order_id=None, amount_paise=1000, observed_at=now)
+    led = Ledger(clock=lambda: now)
+
+    IdempotentRepairer(redis=client, store=InMemoryRepairStore(), ledger=led,
+                       clock=lambda: now).claim(divergence)
+
+    later = now + timedelta(seconds=LEASE_SECONDS + 1)
+    result = IdempotentRepairer(redis=client, store=InMemoryRepairStore(), ledger=led,
+                                clock=lambda: later).repair(divergence, lambda d: {})
+
+    assert result.status == RepairStatus.ESCALATE
+    assert result.reason == "STUCK_REPAIR"
+    assert led.has("STUCK_REPAIR_DETECTED")
+    client.flushdb()
+
+
+def test_s3_the_blast_radius_cap_holds():
+    from eval.arms import run_arm
+
+    capped = run_arm("rules", seed=SEED, n=50, rate=0.25, passes=2,
+                     repair=True, blast_radius=3)
+    assert capped.repairs["succeeded"] == 3
+    assert capped.repairs["blocked"] > 0

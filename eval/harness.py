@@ -83,6 +83,17 @@ def render(results: list[ArmResult], include_timing: bool = True) -> str:
         w(f"  {'transient divergences filtered':<44}{rules.transient_filtered:>14,}")
         w(f"  {'unresolved exceptions':<44}{rules.exceptions_count:>14,}")
         w("")
+        if rules.repairs:
+            rep = rules.repairs
+            w("  Repairs")
+            w("  " + "-" * 74)
+            w(f"  {'repaired (first run)':<44}{rep.get('succeeded', 0):>14,}")
+            w(f"  {'replayed (no write)':<44}{rep.get('replayed', 0):>14,}")
+            w(f"  {'deduped by DB constraint':<44}{rep.get('already_applied', 0):>14,}")
+            w(f"  {'escalated by policy':<44}{rep.get('escalated', 0):>14,}")
+            w(f"  {'blocked by blast radius':<44}{rep.get('blocked', 0):>14,}")
+            w(f"  {'rows written':<44}{rep.get('writes', 0):>14,}")
+            w("")
         w("  Reading the match rate")
         w("  " + "-" * 74)
         w("  Four of these classes are exact set operations. 100% is the expected floor,")
@@ -108,7 +119,7 @@ def main(argv: list[str] | None = None) -> int:
     args.results_dir.mkdir(parents=True, exist_ok=True)
 
     results = [
-        run_arm(arm, seed=args.seed, n=args.n, rate=args.rate,
+        run_arm(arm, seed=args.seed, n=args.n, rate=args.rate, repair=(arm == "rules"),
                 exceptions_path=PROJECT_ROOT / "exceptions.csv" if arm == "rules" else None)
         for arm in arms
     ]

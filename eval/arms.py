@@ -17,20 +17,26 @@ from datetime import timedelta
 from pathlib import Path
 from typing import Any, Literal
 
+import redis as redis_lib
+
 from statesync.classifier.deterministic import classify
-from statesync.config import BASE_TIME, SEED, STALENESS_WINDOW
+from statesync.config import BASE_TIME, REDIS_URL, SEED, STALENESS_WINDOW
+from statesync.executor.runner import RepairRunner
+from statesync.executor.store import InMemoryRepairStore
 from statesync.generator.synthetic import generate_batch
 from statesync.injector.clean import inject_clean
 from statesync.ledger.chain import Ledger
 from statesync.metrics.throughput import Stopwatch, ThroughputReport
 from statesync.models.domain import Divergence
 from statesync.models.enums import DivergenceClass
+from statesync.policy.blast_radius import BlastRadiusCap
+from statesync.policy.gates import PolicyGate
 from statesync.reconciler.invariants import check_ledger_invariant
 from statesync.reconciler.staleness import ConfirmationTracker
 from statesync.reconciler.three_way import build_index, reconcile_payment
 from statesync.reporting.exceptions_csv import write_exceptions_csv
 
-__all__ = ["ARMS", "ArmResult", "run_arm"]
+__all__ = ["ARMS", "ArmResult", "make_repair_runner", "run_arm"]
 
 ARMS: tuple[str, ...] = ("none", "rules", "full")
 
@@ -56,6 +62,7 @@ class ArmResult:
     invariant_ok: bool
     invariant_delta_paise: int
     throughput: ThroughputReport
+    repairs: dict[str, int] = field(default_factory=dict)
     storage: str = "in-memory"
     """What the throughput figure was measured against.
 
@@ -119,6 +126,7 @@ class ArmResult:
             "chain_ok": self.chain_ok,
             "invariant_ok": self.invariant_ok,
             "storage": self.storage,
+            "repairs": dict(sorted(self.repairs.items())),
             "inspections": self.inspections,
             "invariant_delta_paise": self.invariant_delta_paise,
             "per_class": {k.value: v for k, v in sorted(self.per_class.items())},
@@ -132,6 +140,9 @@ def run_arm(
     rate: float = 0.25,
     passes: int = 2,
     exceptions_path: Path | None = None,
+    repair: bool = False,
+    blast_radius: int = 200,
+    runner: RepairRunner | None = None,
 ) -> ArmResult:
     """Run one arm over a freshly generated, freshly injected batch."""
     if arm not in ARMS:
@@ -142,6 +153,11 @@ def run_arm(
         )
 
     injected = inject_clean(generate_batch(seed=seed, n=n), seed=seed, rate=rate)
+    # A caller may pass an existing runner to re-run the same batch against
+    # state that already has the repairs in it — that is how the "running it
+    # twice writes nothing" claim is exercised end to end.
+    if repair and runner is None:
+        runner = make_repair_runner(blast_radius=blast_radius, flush=True)
     invariant = check_ledger_invariant(injected.batch)
     truth = injected.truth
     ledger = Ledger(clock=lambda: _RECONCILED_AT)
@@ -180,7 +196,14 @@ def run_arm(
                 if result.resolved_by != "rules":
                     unresolved.append(divergence)
 
-        confirmed_total += len(tracker.observe(found, now=now))
+        confirmed = tracker.observe(found, now=now)
+        confirmed_total += len(confirmed)
+
+        # Repairs run only on *confirmed* divergences — the second observation
+        # is what authorises action, never the first.
+        if runner is not None:
+            for divergence in confirmed:
+                runner.run(divergence)
 
     # The honest exception list: everything the pipeline could not settle.
     # On a clean-only batch this is legitimately empty — the four clean classes
@@ -222,4 +245,24 @@ def run_arm(
         invariant_delta_paise=invariant.delta_paise,
         throughput=watch.report(),
         per_class=per_class,
+        repairs=runner.summary() if runner is not None else {},
+    )
+
+
+def make_repair_runner(blast_radius: int = 200, flush: bool = False) -> RepairRunner:
+    """Build a repair pipeline over real Redis and an in-memory store.
+
+    `flush=True` starts from a clean cache. Passing the same runner to two
+    `run_arm` calls is what proves a second run writes nothing.
+    """
+    client = redis_lib.Redis.from_url(REDIS_URL, decode_responses=True)
+    if flush:
+        client.flushdb()
+    return RepairRunner(
+        redis=client,
+        store=InMemoryRepairStore(),
+        ledger=Ledger(clock=lambda: _RECONCILED_AT),
+        gate=PolicyGate(value_threshold_paise=10_000_000),
+        cap=BlastRadiusCap(max_repairs=blast_radius),
+        clock=lambda: _RECONCILED_AT,
     )

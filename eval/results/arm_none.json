@@ -31,12 +31,13 @@
     }
   },
   "records": 500,
+  "repairs": {},
   "storage": "in-memory",
   "throughput": {
     "p50_us": 0,
     "p99_us": 0,
     "records": 1000,
-    "wall_clock_us": 2821
+    "wall_clock_us": 3388
   },
   "transient_filtered": 0
 }

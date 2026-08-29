@@ -31,13 +31,13 @@ up:  ## start Postgres and Redis (skipped when STATESYNC_NO_COMPOSE=1)
 down:  ## stop Postgres and Redis
 	$(COMPOSE) down
 
-test: test-unit test-int  ## every test layer built so far
+test: test-unit test-prop test-int  ## every test layer built so far
 
 test-unit:  ## one function, no I/O (<5s)
 	$(PYTEST) tests/unit -q
 
-test-prop:  ## invariants under generated input (Phase 3)
-	@echo "test-prop: no property tests until Phase 3 (idempotency)."
+test-prop:  ## invariants under generated input (hypothesis)
+	$(PYTEST) tests/property -q
 
 test-int:  ## real Postgres + Redis, full pipeline (<2min)
 	$(PYTEST) tests/integration -q
@@ -60,7 +60,7 @@ determinism:  ## the same seed must produce byte-identical output
 		test "$$a" = "$$b" && echo "determinism: OK  $$a" \
 		|| (echo "determinism: BROKEN  $$a != $$b" && exit 1)
 
-verify: lint test-unit test-int smoke determinism  ## green before any commit to main
+verify: lint test-unit test-prop test-int smoke determinism  ## green before any commit to main
 	@echo "verify: green"
 
 lint:  ## ruff + mypy --strict

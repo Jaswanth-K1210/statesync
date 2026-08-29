@@ -243,3 +243,67 @@ def test_both_throughput_numbers_are_reported(rules):
     assert rules.inspections == 1000
     assert rules.inspections_per_sec > rules.records_per_sec
     assert abs(rules.inspections_per_sec / rules.records_per_sec - 2.0) < 0.01
+
+
+# ── repairs in the eval ─────────────────────────────────────────────────────
+
+def test_repairs_run_only_on_confirmed_divergences():
+    """The first observation authorises nothing, so one pass repairs nothing."""
+    one = run_arm("rules", seed=SEED, n=200, rate=0.25, passes=1, repair=True)
+    assert one.detected > 0
+    assert one.repairs["succeeded"] == 0
+
+
+def test_a_second_pass_authorises_the_repairs():
+    two = run_arm("rules", seed=SEED, n=200, rate=0.25, passes=2, repair=True)
+    assert two.repairs["succeeded"] == two.confirmed
+
+
+def test_running_the_same_batch_twice_writes_nothing_the_second_time():
+    """The headline idempotency claim, at eval scale.
+
+    Both runs share one repair pipeline, so the second one meets state that
+    already contains every repair — exactly what re-running the demo does.
+    """
+    from eval.arms import make_repair_runner
+
+    runner = make_repair_runner(flush=True)
+    first = run_arm("rules", seed=SEED, n=200, rate=0.25, passes=2,
+                    repair=True, runner=runner)
+    writes_after_first = first.repairs["writes"]
+
+    second = run_arm("rules", seed=SEED, n=200, rate=0.25, passes=2,
+                     repair=True, runner=runner)
+
+    assert second.repairs["writes"] == writes_after_first, "the second run wrote"
+    assert second.repairs["replayed"] >= first.repairs["succeeded"]
+
+
+def test_flushing_redis_between_eval_runs_still_writes_nothing():
+    """Redis is a cache. Wipe it and the DB constraint must still hold."""
+    from eval.arms import make_repair_runner
+
+    runner = make_repair_runner(flush=True)
+    first = run_arm("rules", seed=SEED, n=200, rate=0.25, passes=2,
+                    repair=True, runner=runner)
+    writes_after_first = first.repairs["writes"]
+
+    runner.redis.flushall()
+
+    second = run_arm("rules", seed=SEED, n=200, rate=0.25, passes=2,
+                     repair=True, runner=runner)
+    assert second.repairs["writes"] == writes_after_first
+    assert second.repairs["already_applied"] > 0
+    assert runner.ledger.has("REPAIR_DEDUPED_BY_DB")
+
+
+def test_the_blast_radius_cap_is_enforced_in_the_eval():
+    capped = run_arm("rules", seed=SEED, n=500, rate=0.25, passes=2,
+                     repair=True, blast_radius=10)
+    assert capped.repairs["succeeded"] == 10
+    assert capped.repairs["blocked"] > 0
+
+
+def test_repair_counts_are_ledger_safe():
+    result = run_arm("rules", seed=SEED, n=100, rate=0.25, passes=2, repair=True)
+    canonical(result.as_event())

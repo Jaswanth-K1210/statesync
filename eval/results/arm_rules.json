@@ -31,12 +31,23 @@
     }
   },
   "records": 500,
+  "repairs": {
+    "already_applied": 0,
+    "blast_radius_blocked": 0,
+    "blast_radius_used": 124,
+    "blocked": 0,
+    "escalated": 0,
+    "failed": 0,
+    "replayed": 0,
+    "succeeded": 124,
+    "writes": 155
+  },
   "storage": "in-memory",
   "throughput": {
     "p50_us": 1,
-    "p99_us": 17,
+    "p99_us": 38,
     "records": 1000,
-    "wall_clock_us": 27150
+    "wall_clock_us": 275369
   },
   "transient_filtered": 0
 }
