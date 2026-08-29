@@ -140,23 +140,32 @@ def test_invariant_holds_on_a_clean_batch(batch):
     assert check_ledger_invariant(batch).ok
 
 
+def _drop_a_real_entry(batch):
+    """Drop an entry that actually carries value.
+
+    Dropping any entry is not enough: a zero-amount line changes nothing, and
+    a test that relied on the last entry being non-zero would pass or fail on
+    the seed rather than on the behaviour.
+    """
+    dropped = next(e for e in batch.ledger_entries if e.amount_paise != 0)
+    kept = [e for e in batch.ledger_entries if e.entry_id != dropped.entry_id]
+    return dropped, Batch(seed=batch.seed, payments=batch.payments,
+                          orders=batch.orders, ledger_entries=kept)
+
+
 def test_invariant_catches_an_injected_imbalance(batch):
     """Catches divergences the three-way comparison misses."""
-    broken = Batch(seed=batch.seed, payments=batch.payments, orders=batch.orders,
-                   ledger_entries=batch.ledger_entries[:-1])
+    _, broken = _drop_a_real_entry(batch)
     assert not check_ledger_invariant(broken).ok
 
 
 def test_invariant_reports_the_signed_gap(batch):
-    dropped = batch.ledger_entries[-1]
-    broken = Batch(seed=batch.seed, payments=batch.payments, orders=batch.orders,
-                   ledger_entries=batch.ledger_entries[:-1])
+    dropped, broken = _drop_a_real_entry(batch)
     assert check_ledger_invariant(broken).delta_paise == -dropped.amount_paise
 
 
 def test_invariant_violation_can_be_raised_for_strict_mode(batch):
-    broken = Batch(seed=batch.seed, payments=batch.payments, orders=batch.orders,
-                   ledger_entries=batch.ledger_entries[:-1])
+    _, broken = _drop_a_real_entry(batch)
     with pytest.raises(LedgerInvariantViolation):
         check_ledger_invariant(broken).raise_if_violated()
 

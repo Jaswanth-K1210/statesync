@@ -218,14 +218,17 @@ def inject_hard_cases(batch: Batch, seed: int = SEED, now: datetime | None = Non
     b.payment("pay_hc05", amount=400_000, status=PaymentStatus.CAPTURED, age=OLD,
               fee=8_000, tax=1_440)
     b.order("order_hc05", "pay_hc05", total=400_000, age=OLD)
-    b.entry("le_hc05", "pay_hc05", "order_hc05", amount=390_560, kind="capture", age=OLD)
+    b.entry("le_hc05", "pay_hc05", "order_hc05", amount=400_000, kind="capture", age=OLD)
+    b.entry("le_hc05f", "pay_hc05", "order_hc05", amount=-9_440, kind="fee", age=OLD)
     b.record("case_05", payments=("pay_hc05",), orders=("order_hc05",))
 
     # 6 — the same, 60 paise short. That residual is the whole exercise.
     b.payment("pay_hc06", amount=400_000, status=PaymentStatus.CAPTURED, age=OLD,
               fee=8_000, tax=1_440)
     b.order("order_hc06", "pay_hc06", total=400_000, age=OLD)
-    b.entry("le_hc06", "pay_hc06", "order_hc06", amount=390_500, kind="capture", age=OLD)
+    b.entry("le_hc06", "pay_hc06", "order_hc06", amount=400_000, kind="capture", age=OLD)
+    # The merchant booked 60 paise more fee than the gateway charged.
+    b.entry("le_hc06f", "pay_hc06", "order_hc06", amount=-9_500, kind="fee", age=OLD)
     b.record("case_06", payments=("pay_hc06",), orders=("order_hc06",),
              detail={"residual_paise": "60"})
 
@@ -257,7 +260,8 @@ def inject_hard_cases(batch: Batch, seed: int = SEED, now: datetime | None = Non
     b.payment("pay_hc09", amount=500_000, status=PaymentStatus.CAPTURED, age=OLD,
               fee=10_000, tax=1_800)
     b.order("order_hc09", "pay_hc09", total=500_000, age=OLD)
-    b.entry("le_hc09", "pay_hc09", "order_hc09", amount=438_200, kind="capture", age=OLD)
+    b.entry("le_hc09", "pay_hc09", "order_hc09", amount=500_000, kind="capture", age=OLD)
+    b.entry("le_hc09f", "pay_hc09", "order_hc09", amount=-61_800, kind="fee", age=OLD)
     b.record("case_09", payments=("pay_hc09",), orders=("order_hc09",),
              detail={"prior_cycle_chargeback_paise": "50000"})
 
@@ -291,7 +295,8 @@ def inject_hard_cases(batch: Batch, seed: int = SEED, now: datetime | None = Non
     b.payment("pay_hc13", amount=400_000, status=PaymentStatus.CAPTURED, age=OLD,
               fee=8_000, tax=1_440)
     b.order("order_hc13", "pay_hc13", total=400_000, age=OLD)
-    b.entry("le_hc13", "pay_hc13", "order_hc13", amount=389_420, kind="capture", age=OLD)
+    b.entry("le_hc13", "pay_hc13", "order_hc13", amount=400_000, kind="capture", age=OLD)
+    b.entry("le_hc13f", "pay_hc13", "order_hc13", amount=-10_580, kind="fee", age=OLD)
     b.record("case_13", payments=("pay_hc13",), orders=("order_hc13",),
              detail={"residual_paise": "1140"})
 
@@ -299,7 +304,8 @@ def inject_hard_cases(batch: Batch, seed: int = SEED, now: datetime | None = Non
     b.payment("pay_hc14", amount=400_000, status=PaymentStatus.CAPTURED, age=OLD,
               fee=8_000, tax=1_440)
     b.order("order_hc14", "pay_hc14", total=400_000, age=OLD)
-    b.entry("le_hc14", "pay_hc14", "order_hc14", amount=389_420, kind="capture", age=OLD)
+    b.entry("le_hc14", "pay_hc14", "order_hc14", amount=400_000, kind="capture", age=OLD)
+    b.entry("le_hc14f", "pay_hc14", "order_hc14", amount=-10_580, kind="fee", age=OLD)
     b.record("case_14", payments=("pay_hc14",), orders=("order_hc14",),
              detail={"residual_paise": "1140"})
 
@@ -310,8 +316,10 @@ def inject_hard_cases(batch: Batch, seed: int = SEED, now: datetime | None = Non
               fee=2_500, tax=450, instrument="card_domestic")
     b.order("order_hc15a", "pay_hc15a", total=125_003, age=OLD)
     b.order("order_hc15b", "pay_hc15b", total=125_003, age=OLD)
-    b.entry("le_hc15a", "pay_hc15a", "order_hc15a", amount=122_052, kind="capture", age=OLD)
-    b.entry("le_hc15b", "pay_hc15b", "order_hc15b", amount=122_052, kind="capture", age=OLD)
+    b.entry("le_hc15a", "pay_hc15a", "order_hc15a", amount=125_003, kind="capture", age=OLD)
+    b.entry("le_hc15af", "pay_hc15a", "order_hc15a", amount=-2_951, kind="fee", age=OLD)
+    b.entry("le_hc15b", "pay_hc15b", "order_hc15b", amount=125_003, kind="capture", age=OLD)
+    b.entry("le_hc15bf", "pay_hc15b", "order_hc15b", amount=-2_951, kind="fee", age=OLD)
     b.record("case_15", payments=("pay_hc15a", "pay_hc15b"),
              orders=("order_hc15a", "order_hc15b"),
              detail={"residual_paise": "1"})

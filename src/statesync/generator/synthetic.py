@@ -141,24 +141,46 @@ def generate_batch(seed: int = SEED, n: int = 500) -> Batch:
             )
         )
 
-        # The books record what actually **settled**, not the gross sale: the
-        # gateway deducts its fee before the money lands, so booking gross
-        # would mean the ledger disagreed with the bank on every single clean
-        # transaction. Booking net is what makes an unexplained residual
-        # meaningful — it is the gap left *after* known fees are accounted for,
-        # which is the only thing worth escalating.
-        settled = amount - (mdr + gst if has_fee else 0)
+        # The books carry the **gross** sale as revenue and the gateway's cut
+        # as a separate expense line. Booking net would understate output GST
+        # liability — a merchant owes GST on gross sale value and claims input
+        # tax credit on the MDR's GST separately, so netting them is a filing
+        # error rather than a simplification.
+        #
+        #     capture  +gross
+        #     fee      -(mdr + gst)
+        #     -----------------------
+        #              = what settled
+        #
+        # It also makes the residual nameable: the gap between the fee the
+        # merchant booked and the fee the gateway actually charged.
+        fee_total = mdr + gst if has_fee else 0
+        settled = amount - fee_total
         if status in (PaymentStatus.CAPTURED, PaymentStatus.REFUNDED):
             entries.append(
                 LedgerEntryRecord(
                     entry_id=f"le_{_token(rng)}",
                     order_id=order_id,
                     payment_id=payment_id,
-                    amount_paise=settled,
+                    amount_paise=amount,
                     entry_type="capture",
                     created_at=captured_at,
                 )
             )
+            if has_fee and fee_total > 0:
+                # No fee data means no fee line, and a zero fee (UPI at 0% MDR)
+                # means no line either — a zero-amount entry is noise in the
+                # books and would make "the fee line is missing" ambiguous.
+                entries.append(
+                    LedgerEntryRecord(
+                        entry_id=f"le_{_token(rng)}",
+                        order_id=order_id,
+                        payment_id=payment_id,
+                        amount_paise=-fee_total,
+                        entry_type="fee",
+                        created_at=captured_at,
+                    )
+                )
         if status == PaymentStatus.REFUNDED:
             entries.append(
                 LedgerEntryRecord(

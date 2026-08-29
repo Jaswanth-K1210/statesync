@@ -66,8 +66,9 @@ def test_refunded_payments_are_booked_twice_capture_then_refund():
     refunded = {p.payment_id for p in batch.payments if p.status == PaymentStatus.REFUNDED}
     assert refunded, "the generator should produce refunds at n=300"
     for pid in refunded:
-        kinds = [e.entry_type for e in batch.ledger_entries if e.payment_id == pid]
-        assert sorted(kinds) == ["capture", "refund"]
+        kinds = {e.entry_type for e in batch.ledger_entries if e.payment_id == pid}
+        assert {"capture", "refund"} <= kinds
+        assert kinds <= {"capture", "fee", "refund"}
 
 
 def test_failed_payments_are_never_booked():

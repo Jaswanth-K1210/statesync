@@ -279,10 +279,19 @@ def run_arm(
 
     per_class: dict[DivergenceClass, dict[str, int]] = {}
     for key, klass in truth.items():
-        stats = per_class.setdefault(klass, {"injected": 0, "detected": 0})
+        stats = per_class.setdefault(klass, {"injected": 0, "detected": 0, "rate_bps": 0})
         stats["injected"] += 1
         if key in detected_keys:
             stats["detected"] += 1
+
+    # The rate is stored, not left for the template to derive. A figure
+    # computed in one place and recomputed in another is how case 13's reason
+    # code came out wrong — the report must read values, never re-derive them.
+    # Basis points keeps it an integer, so it stays ledger-safe.
+    for stats in per_class.values():
+        stats["rate_bps"] = (
+            stats["detected"] * 10_000 // stats["injected"] if stats["injected"] else 0
+        )
 
     return ArmResult(
         arm=arm,

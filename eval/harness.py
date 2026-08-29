@@ -65,7 +65,7 @@ def render(results: list[ArmResult], include_timing: bool = True) -> str:
         w("  " + "-" * 74)
         w(f"  {'class':<26}{'injected':>10}{'detected':>10}{'rate':>10}")
         for klass, stats in sorted(rules.per_class.items()):
-            rate = stats["detected"] / stats["injected"] if stats["injected"] else 0.0
+            rate = stats["rate_bps"] / 10_000
             w(f"  {klass.value:<26}{stats['injected']:>10}{stats['detected']:>10}{_pct(rate):>10}")
         w("")
         w("  Safety and integrity")

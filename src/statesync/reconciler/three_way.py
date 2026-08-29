@@ -35,7 +35,7 @@ class ReconcileIndex:
     orders_by_payment: dict[str, list[Order]]
     entry_types: dict[str, set[str]]
     booked_paise: dict[str, int]
-    """Sum of capture entries per payment — what the books say landed."""
+    """revenue + fee_expense per payment — what the books say actually landed."""
 
 
 def build_index(batch: Batch) -> ReconcileIndex:
@@ -51,7 +51,7 @@ def build_index(batch: Batch) -> ReconcileIndex:
 
     booked: dict[str, int] = defaultdict(int)
     for entry in batch.ledger_entries:
-        if entry.payment_id is not None and entry.entry_type == "capture":
+        if entry.payment_id is not None and entry.entry_type in ("capture", "fee"):
             booked[entry.payment_id] += entry.amount_paise
 
     return ReconcileIndex(orders_by_payment=dict(orders_by_payment),
@@ -118,6 +118,10 @@ def reconcile_payment(
     # fee explains. Known fee and tax are subtracted **deterministically and
     # first**; only the residual left over is genuinely ambiguous, and only
     # that residual is ever handed to the propose-verify layer.
+    #
+    # With gross booking the residual has a name: it is the gap between the
+    # fee the merchant booked and the fee the gateway actually charged, which
+    # has causes an ops person can act on rather than an abstract shortfall.
     if payment.status == PaymentStatus.CAPTURED and orders:
         known = (payment.fee_paise or 0) + (payment.tax_paise or 0)
         expected_net = orders[0].total_paise - known

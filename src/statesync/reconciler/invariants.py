@@ -27,6 +27,9 @@ class InvariantResult:
     ok: bool
     expected_paise: int
     actual_paise: int
+    revenue_paise: int = 0
+    fee_expense_paise: int = 0
+    settled_paise: int = 0
 
     @property
     def delta_paise(self) -> int:
@@ -43,7 +46,12 @@ class InvariantResult:
 
 
 def check_ledger_invariant(batch: Batch) -> InvariantResult:
-    """Compare the books against what the gateway says actually moved.
+    """Check `revenue + fee_expense == settled`.
+
+    Three terms rather than two, because the books carry gross revenue and the
+    gateway's cut as separate lines. A wrong fee line moves `actual` without
+    moving `revenue`, which is exactly the error gross booking exists to make
+    visible.
 
     Exact integer comparison — there is no tolerance, because every amount in
     the system is integer paise and a one-paisa gap is a real gap.
@@ -51,10 +59,18 @@ def check_ledger_invariant(batch: Batch) -> InvariantResult:
     expected = 0
     for payment in batch.payments:
         if payment.status == PaymentStatus.CAPTURED:
-            # Net of the gateway's fee, matching what the books record.
-            expected += payment.amount_paise - (payment.fee_paise or 0) - (payment.tax_paise or 0)
+            # What the gateway says should have landed after its own cut.
+            expected += (
+                payment.amount_paise - (payment.fee_paise or 0) - (payment.tax_paise or 0)
+            )
         elif payment.status == PaymentStatus.REFUNDED:
             expected += 0  # captured then returned: net zero on the books
 
-    actual = sum(entry.amount_paise for entry in batch.ledger_entries)
-    return InvariantResult(ok=expected == actual, expected_paise=expected, actual_paise=actual)
+    revenue = sum(e.amount_paise for e in batch.ledger_entries if e.entry_type != "fee")
+    fee_expense = sum(e.amount_paise for e in batch.ledger_entries if e.entry_type == "fee")
+    actual = revenue + fee_expense
+
+    return InvariantResult(
+        ok=expected == actual, expected_paise=expected, actual_paise=actual,
+        revenue_paise=revenue, fee_expense_paise=fee_expense, settled_paise=expected,
+    )

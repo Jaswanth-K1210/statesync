@@ -86,7 +86,8 @@ def test_refund_without_ledger_write_removes_only_the_refund_entry(batch):
     entries = [e for e in inj.result().batch.ledger_entries
                if e.payment_id == refunded.payment_id]
 
-    assert [e.entry_type for e in entries] == ["capture"], "the capture entry stays"
+    assert "refund" not in [e.entry_type for e in entries]
+    assert "capture" in [e.entry_type for e in entries], "the capture entry stays"
 
 
 # ── ground truth ────────────────────────────────────────────────────────────
