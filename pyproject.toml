@@ -1,0 +1,48 @@
+[project]
+name = "statesync"
+version = "0.1.0"
+description = "Payment/order divergence detection and idempotent repair"
+requires-python = ">=3.11"
+dependencies = [
+    "pydantic>=2.7",
+    "sqlalchemy>=2.0",
+    "psycopg[binary]>=3.1",
+    "redis>=5.0",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "hypothesis>=6.100",
+    "ruff>=0.4",
+    "mypy>=1.10",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q --strict-markers"
+markers = [
+    "smoke: fast liveness checks, must stay under the 30s budget",
+    "integration: requires real Postgres and Redis",
+]
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "T20"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+packages = ["statesync"]
+mypy_path = "src"

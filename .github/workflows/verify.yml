@@ -1,0 +1,50 @@
+name: verify
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: statesync
+          POSTGRES_PASSWORD: statesync
+          POSTGRES_DB: statesync
+        ports: ["55432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U statesync -d statesync"
+          --health-interval 1s --health-timeout 3s --health-retries 30
+      redis:
+        image: redis:7-alpine
+        ports: ["56379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 1s --health-timeout 3s --health-retries 30
+
+    env:
+      # The services above are already up; make must not reach for compose.
+      STATESYNC_NO_COMPOSE: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install
+        run: |
+          python -m venv .venv
+          .venv/bin/python -m pip install --upgrade pip
+          .venv/bin/python -m pip install -e ".[dev]"
+
+      - name: Apply migrations
+        run: .venv/bin/python -c "from statesync.ledger.store import apply_migrations; apply_migrations()"
+
+      - name: make verify
+        run: make verify
