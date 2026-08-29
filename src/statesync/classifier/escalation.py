@@ -38,6 +38,7 @@ from statesync.classifier.provider import (
     HypothesisRequest,
 )
 from statesync.classifier.verifier import Component, Hypothesis, Verdict, verify
+from statesync.ledger.chain import Ledger
 from statesync.models.domain import Divergence
 from statesync.models.enums import ReasonCode
 
@@ -128,6 +129,7 @@ def build_packet(
     residual_paise: int,
     provider: HypothesisProvider,
     request: HypothesisRequest,
+    ledger: Ledger | None = None,
 ) -> EscalationPacket:
     """Run the bounded propose-verify loop and package the outcome.
 
@@ -138,9 +140,14 @@ def build_packet(
     Hard cap: `MAX_PASSES` passes, `MAX_HYPOTHESES` hypotheses. No adaptive
     retry loop — an unbounded search over an under-determined problem will
     eventually fit by coincidence, and that is worse than an escalation.
+
+    **Every pass is written to the ledger.** An unlogged retry is a provider
+    call nobody can audit, and the bound is only meaningful if the count is
+    reconstructable after the fact.
     """
     hypotheses: list[Hypothesis] = []
     passes_used = 0
+    divergence_key = divergence.deterministic_key()
 
     for pass_no in range(MAX_PASSES):
         if pass_no > 0:
@@ -149,13 +156,23 @@ def build_packet(
             )
         passes_used = pass_no + 1
 
-        for proposal in provider.propose(request):
+        proposals = provider.propose(request)
+        accepted = 0
+        for proposal in proposals:
             if len(hypotheses) >= MAX_HYPOTHESES:
                 break
             hypotheses.append(
                 verify(proposal, residual_paise=residual_paise,
                        artifacts=request.artifacts, label=f"H{len(hypotheses) + 1}")
             )
+            accepted += 1
+
+        if ledger is not None:
+            ledger.append("HYPOTHESIS_PASS", divergence_key=divergence_key,
+                          pass_no=passes_used, proposed=len(proposals),
+                          verified_so_far=sum(
+                              1 for h in hypotheses if h.verdict == Verdict.VERIFIED
+                          ), accepted=accepted)
 
         if any(h.verdict == Verdict.VERIFIED for h in hypotheses):
             break
@@ -167,6 +184,14 @@ def build_packet(
         reason = ReasonCode.AMBIGUOUS_MULTIPLE_VERIFIED
     else:
         reason = ReasonCode.NO_HYPOTHESIS_VERIFIED
+
+    if ledger is not None:
+        ledger.append(
+            "HYPOTHESIS_VERIFIED" if verified else "HYPOTHESIS_EXHAUSTED",
+            divergence_key=divergence_key, passes_used=passes_used,
+            hypotheses=len(hypotheses), verified=len(verified),
+            reason_code=reason.value,
+        )
 
     return EscalationPacket(
         divergence=divergence,

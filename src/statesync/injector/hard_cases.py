@@ -85,6 +85,14 @@ class HardCaseBatch:
     batch: Batch
     cases: list[HardCase]
     packets: dict[str, EscalationPacket]
+    provider: FixtureHypothesisProvider | None = None
+    """Proposals for the ambiguous cases, keyed by payment id.
+
+    The eval routes every AMOUNT_MISMATCH through this, so an exception row's
+    reason code comes from the packet that actually ran rather than from a
+    classifier default. Phase 5 substitutes an LLM provider here."""
+
+    artifacts: ArtifactIndex | None = None
     late_arrivals: tuple[Order, ...] = ()
     """Records that land *between* reconciliation passes.
 
@@ -318,17 +326,21 @@ def inject_hard_cases(batch: Batch, seed: int = SEED, now: datetime | None = Non
                        customer_id="cust_late", total_paise=210_000,
                        status="confirmed", created_at=now - OLD, line_items_count=2)
 
-    packets = _build_packets(b)
+    packets, provider = _build_packets(b)
     return HardCaseBatch(
         batch=Batch(seed=b.seed, payments=b.payments, orders=b.orders,
                     ledger_entries=b.entries),
         cases=b.cases,
         packets=packets,
         late_arrivals=(late_order,),
+        provider=provider,
+        artifacts=b.artifacts,
     )
 
 
-def _build_packets(b: _Builder) -> dict[str, EscalationPacket]:
+def _build_packets(
+    b: _Builder,
+) -> tuple[dict[str, EscalationPacket], FixtureHypothesisProvider]:
     """Escalation packets for the two propose-verify cases.
 
     The proposals are fixtures, not model output: the verifier is proven here,
@@ -337,9 +349,11 @@ def _build_packets(b: _Builder) -> dict[str, EscalationPacket]:
     """
     residual = 1140
 
-    # Case 13 — two genuinely different decompositions, both exact.
+    # One provider for both cases, keyed by payment id so the eval can look up
+    # proposals for any AMOUNT_MISMATCH it detects. Phase 5 swaps this for an
+    # LLM provider behind the same interface and nothing else changes.
     case_13 = FixtureHypothesisProvider({
-        "case_13": [
+        "pay_hc13": [
             Proposal(components=[
                 Component(name="mdr", amount_paise=800, cites="pay_hc13", rate_bps=200),
                 Component(name="gst", amount_paise=340, cites="pay_hc13", rate_bps=1800),
@@ -353,7 +367,7 @@ def _build_packets(b: _Builder) -> dict[str, EscalationPacket]:
 
     # Case 14 — five candidates, each wrong in a different, informative way.
     case_14 = FixtureHypothesisProvider({
-        "case_14": [
+        "pay_hc14": [
             Proposal(components=[
                 Component(name="instant_settlement", amount_paise=914, cites="stl_hard",
                           rate_bps=30),
@@ -384,17 +398,20 @@ def _build_packets(b: _Builder) -> dict[str, EscalationPacket]:
     known = [Component(name="fee", amount_paise=8_000, cites="pay_hc13"),
              Component(name="tax", amount_paise=1_440, cites="pay_hc13")]
 
-    return {
+    combined = FixtureHypothesisProvider({**case_13.fixtures, **case_14.fixtures})
+
+    packets = {
         "case_13": build_packet(
             divergence=divergence_13, known_components=known, residual_paise=residual,
-            provider=case_13,
+            provider=FixtureHypothesisProvider(combined.fixtures),
             request=HypothesisRequest(residual_paise=residual, instrument="card_domestic",
-                                      artifacts=b.artifacts, case_id="case_13"),
+                                      artifacts=b.artifacts, case_id="pay_hc13"),
         ),
         "case_14": build_packet(
             divergence=divergence_14, known_components=known, residual_paise=residual,
-            provider=case_14,
+            provider=FixtureHypothesisProvider(combined.fixtures),
             request=HypothesisRequest(residual_paise=residual, instrument="card_domestic",
-                                      artifacts=b.artifacts, case_id="case_14"),
+                                      artifacts=b.artifacts, case_id="pay_hc14"),
         ),
     }
+    return packets, combined

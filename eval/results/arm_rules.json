@@ -10,8 +10,8 @@
   "inspections": 1038,
   "invariant_delta_paise": -11590241,
   "invariant_ok": false,
-  "ledger_entries": 267,
-  "llm_calls": 0,
+  "ledger_entries": 284,
+  "llm_calls": 11,
   "misclassified": 0,
   "per_class": {
     "captured_no_order": {
@@ -32,7 +32,8 @@
     }
   },
   "reason_codes": {
-    "no_hypothesis_verified": 6
+    "ambiguous_multiple_verified": 1,
+    "no_hypothesis_verified": 5
   },
   "records": 500,
   "repairs": {
@@ -49,9 +50,9 @@
   "storage": "in-memory",
   "throughput": {
     "p50_us": 1,
-    "p99_us": 22,
+    "p99_us": 16,
     "records": 1038,
-    "wall_clock_us": 490665
+    "wall_clock_us": 227447
   },
   "transient_filtered": 1
 }

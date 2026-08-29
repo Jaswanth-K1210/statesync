@@ -20,6 +20,9 @@ from typing import Any, Literal
 import redis as redis_lib
 
 from statesync.classifier.deterministic import classify
+from statesync.classifier.escalation import build_packet
+from statesync.classifier.provider import HypothesisProvider, HypothesisRequest
+from statesync.classifier.verifier import ArtifactIndex, Component
 from statesync.config import BASE_TIME, REDIS_URL, SEED, STALENESS_WINDOW
 from statesync.executor.runner import RepairRunner
 from statesync.executor.store import InMemoryRepairStore
@@ -66,6 +69,7 @@ class ArmResult:
     repairs: dict[str, int] = field(default_factory=dict)
     hard_cases: int = 0
     reason_codes: dict[str, int] = field(default_factory=dict)
+    reason_codes_total: int = 0
     storage: str = "in-memory"
     """What the throughput figure was measured against.
 
@@ -162,6 +166,8 @@ def run_arm(
     hard_case_count = 0
     hard_payment_ids: set[str] = set()
     late_arrivals: list[Any] = []
+    provider: HypothesisProvider | None = None
+    artifacts: ArtifactIndex | None = None
     if hard_cases:
         # Hard-case timestamps are relative to the reconciliation clock, so
         # case 12's in-flight payment actually lands inside the staleness
@@ -172,6 +178,8 @@ def run_arm(
         hard_case_count = len(hard.cases)
         hard_payment_ids = hard.payment_ids | {"pay_hc16"}
         late_arrivals = list(hard.late_arrivals)
+        provider = hard.provider
+        artifacts = hard.artifacts
     # A caller may pass an existing runner to re-run the same batch against
     # state that already has the repairs in it — that is how the "running it
     # twice writes nothing" claim is exercised end to end.
@@ -220,7 +228,14 @@ def run_arm(
                     misclassified += 1
                 if result.resolved_by != "rules":
                     unresolved.append(divergence)
-                    reasons[key] = result.reason_code
+                    # The reason code comes from the escalation packet that
+                    # actually ran, not from a classifier default. Only the
+                    # packet knows whether two hypotheses verified, and
+                    # mislabelling case 13 in the exception list would hide
+                    # the most interesting row in the file.
+                    reasons[key] = _escalation_reason(
+                        divergence, provider, artifacts, ledger, result.reason_code
+                    )
 
         # The late webhook lands between passes, so pass 2 sees a batch that
         # has moved on — as a real one would.
@@ -285,7 +300,7 @@ def run_arm(
         confirmed=confirmed_total,
         transient_filtered=tracker.transient_filtered,
         exceptions_count=count,
-        llm_calls=0,
+        llm_calls=getattr(provider, "calls", 0),
         ledger_entries=len(ledger.entries),
         chain_ok=ledger.verify()[0],
         invariant_ok=invariant.ok,
@@ -296,6 +311,7 @@ def run_arm(
         hard_cases=hard_case_count,
         reason_codes={r.value: sum(1 for v in reasons.values() if v == r)
                       for r in {*reasons.values()}},
+        reason_codes_total=len(reasons),
     )
 
 
@@ -316,3 +332,41 @@ def make_repair_runner(blast_radius: int = 200, flush: bool = False) -> RepairRu
         cap=BlastRadiusCap(max_repairs=blast_radius),
         clock=lambda: _RECONCILED_AT,
     )
+
+
+def _escalation_reason(
+    divergence: Divergence,
+    provider: HypothesisProvider | None,
+    artifacts: ArtifactIndex | None,
+    ledger: Ledger,
+    fallback: ReasonCode,
+) -> ReasonCode:
+    """Run the bounded propose-verify loop for one under-determined divergence.
+
+    With no provider configured the outcome is `fallback` — which is honest:
+    nothing was generated, so nothing verified. This is the seam Phase 5 fills
+    with an LLM provider; the loop, the verifier and the packet do not change.
+    """
+    if provider is None or artifacts is None:
+        return fallback
+
+    residual = int(divergence.detail.get("residual_paise", "0"))
+    known = int(divergence.detail.get("known_paise", "0"))
+    packet = build_packet(
+        divergence=divergence,
+        known_components=(
+            [Component(name="fee_and_tax", amount_paise=known,
+                       cites=divergence.payment_id or "")]
+            if known else []
+        ),
+        residual_paise=residual,
+        provider=provider,
+        request=HypothesisRequest(
+            residual_paise=residual,
+            instrument=divergence.detail.get("instrument", "unknown"),
+            artifacts=artifacts,
+            case_id=divergence.payment_id or "",
+        ),
+        ledger=ledger,
+    )
+    return packet.reason_code

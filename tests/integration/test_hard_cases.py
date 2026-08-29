@@ -272,3 +272,69 @@ def test_hard_cases_are_deterministic_at_one_seed():
     a = inject_hard_cases(generate_batch(seed=SEED, n=120), seed=SEED, now=NOW)
     b = inject_hard_cases(generate_batch(seed=SEED, n=120), seed=SEED, now=NOW)
     assert a.batch.digest() == b.batch.digest()
+
+
+# ── the exception list must not mislabel the cases it exists to surface ─────
+
+def test_case_13_is_labelled_ambiguous_in_the_exception_list(tmp_path):
+    """A reviewer opening exceptions.csv looking for case 13 must find it
+    correctly labelled.
+
+    The reason code has to come from the escalation packet, not from a
+    classifier default — the packet is the only thing that knows two
+    hypotheses verified.
+    """
+    import csv
+
+    from eval.arms import run_arm
+
+    path = tmp_path / "exceptions.csv"
+    run_arm("rules", seed=SEED, n=60, rate=0.25, hard_cases=True, exceptions_path=path)
+    rows = {r["payment_id"]: r for r in
+            csv.DictReader(line for line in path.open() if not line.startswith("#"))}
+
+    assert rows["pay_hc13"]["reason_code"] == "ambiguous_multiple_verified"
+
+
+def test_case_14_is_labelled_no_hypothesis_verified_in_the_exception_list(tmp_path):
+    import csv
+
+    from eval.arms import run_arm
+
+    path = tmp_path / "exceptions.csv"
+    run_arm("rules", seed=SEED, n=60, rate=0.25, hard_cases=True, exceptions_path=path)
+    rows = {r["payment_id"]: r for r in
+            csv.DictReader(line for line in path.open() if not line.startswith("#"))}
+
+    assert rows["pay_hc14"]["reason_code"] == "no_hypothesis_verified"
+
+
+def test_case_07_produces_no_exception_row(tmp_path):
+    """Not merging is the correct outcome, so there is nothing to escalate."""
+    import csv
+
+    from eval.arms import run_arm
+
+    path = tmp_path / "exceptions.csv"
+    run_arm("rules", seed=SEED, n=60, rate=0.25, hard_cases=True, exceptions_path=path)
+    payment_ids = {r["payment_id"] for r in
+                   csv.DictReader(line for line in path.open() if not line.startswith("#"))}
+
+    assert "pay_hc07a" not in payment_ids and "pay_hc07b" not in payment_ids
+
+
+def test_the_reason_code_breakdown_distinguishes_the_two_refusals():
+    from eval.arms import run_arm
+
+    result = run_arm("rules", seed=SEED, n=60, rate=0.25, hard_cases=True)
+    assert result.reason_codes.get("ambiguous_multiple_verified", 0) >= 1
+    assert result.reason_codes.get("no_hypothesis_verified", 0) >= 1
+
+
+def test_the_eval_reports_provider_calls():
+    """Bounded generation is only credible if the call count is reported."""
+    from eval.arms import run_arm
+
+    result = run_arm("rules", seed=SEED, n=60, rate=0.25, hard_cases=True)
+    assert result.llm_calls > 0
+    assert result.llm_calls <= 2 * result.reason_codes_total
