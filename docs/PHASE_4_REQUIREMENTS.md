@@ -1,4 +1,4 @@
-# Carried into Phase 4
+# Carried into Phase 4 — resolved
 
 Requirements discovered during Phases 2–3 that Phase 4 must satisfy. Written
 down at the moment they were found, because each one ships as a silent defect
@@ -15,8 +15,12 @@ window never fires and `transient_filtered` ships as a permanent zero. That
 metric is the direct evidence the two-run confirmation is load-bearing; a
 constant zero makes it look like dead code.
 
-**Test to add:** `test_transient_divergences_are_filtered_in_the_eval` —
-assert `transient_filtered > 0` on a batch containing fresh in-flight records.
+**Resolved.** A fixed timestamp was only half the problem: the batch was also
+*static* between passes, so a divergence seen on pass 1 was still there on pass
+2 and nothing could ever be filtered. `HardCaseBatch.late_arrivals` models a
+webhook that lands between passes — real when first seen, gone before a repair
+could be authorised. `transient_filtered` is now 1 on a 500-record run, and
+`test_the_staleness_window_filters_a_transient_in_the_eval` pins it.
 
 ## 2. In-flight payments are a hard case, not baseline data
 
@@ -43,3 +47,34 @@ first. Measurement that means anything starts with the ambiguous cases.
 `ArmResult.storage` records this and `test_the_eval_runs_in_memory_and_says_so`
 pins it. If Phase 3+ moves reconciliation behind the Postgres ledger store,
 that field must change with it, and the README figure must be relabelled.
+
+
+---
+
+## Carried into Phase 5
+
+**1. The hypothesis provider seam is already in place.** `HypothesisProvider`
+is a Protocol; `FixtureHypothesisProvider` is the deterministic implementation
+the eval and demo use. Phase 5 adds `LLMHypothesisProvider` behind the same
+interface. The verifier, the escalation packet and cases 13/14 are already
+proven against fixtures, including a set shaped exactly like what a
+hallucinating provider emits
+(`test_a_hallucinating_provider_is_rejected_wholesale`).
+
+**2. Do not route the four clean classes through the LLM.** They are exact set
+operations resolved by `classifier/deterministic.py`. Only `AMOUNT_MISMATCH`
+and `SETTLEMENT_GAP` reach a provider, and only the *residual* does — known fee
+and tax are subtracted first, deterministically.
+
+**3. `SETTLEMENT_GAP` is still unimplemented.** It is in the taxonomy and the
+gate refuses to auto-repair it, but nothing detects it yet. Phase 5 either
+implements it against synthetic payout data — labelled *demonstrated, not
+validated*, reported separately, never merged into the headline — or reports it
+as `NOT_IMPLEMENTED` with the reason.
+
+**4. Fee-schedule coverage is not yet reported.** The generator omits fee data
+on 15% of payments and the reconciler treats missing fee data as zero, so those
+payments cannot currently raise `FEE_SCHEDULE_UNKNOWN`. Phase 5 must add the
+schedule lookup and report coverage as a first-class metric: a system claiming
+95% verification while silently escalating the 40% it could not price is not
+honest.

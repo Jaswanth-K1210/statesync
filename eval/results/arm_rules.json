@@ -1,15 +1,16 @@
 {
   "arm": "rules",
   "chain_ok": true,
-  "confirmed": 124,
+  "confirmed": 133,
   "detected": 124,
-  "exceptions_count": 0,
+  "exceptions_count": 6,
   "false_positives": 0,
+  "hard_cases": 15,
   "injected": 124,
-  "inspections": 1000,
-  "invariant_delta_paise": -11502600,
+  "inspections": 1038,
+  "invariant_delta_paise": -11590241,
   "invariant_ok": false,
-  "ledger_entries": 248,
+  "ledger_entries": 267,
   "llm_calls": 0,
   "misclassified": 0,
   "per_class": {
@@ -30,24 +31,27 @@
       "injected": 31
     }
   },
+  "reason_codes": {
+    "no_hypothesis_verified": 6
+  },
   "records": 500,
   "repairs": {
     "already_applied": 0,
     "blast_radius_blocked": 0,
-    "blast_radius_used": 124,
+    "blast_radius_used": 127,
     "blocked": 0,
-    "escalated": 0,
+    "escalated": 6,
     "failed": 0,
     "replayed": 0,
-    "succeeded": 124,
-    "writes": 155
+    "succeeded": 127,
+    "writes": 159
   },
   "storage": "in-memory",
   "throughput": {
     "p50_us": 1,
-    "p99_us": 21,
-    "records": 1000,
-    "wall_clock_us": 219112
+    "p99_us": 22,
+    "records": 1038,
+    "wall_clock_us": 490665
   },
-  "transient_filtered": 0
+  "transient_filtered": 1
 }

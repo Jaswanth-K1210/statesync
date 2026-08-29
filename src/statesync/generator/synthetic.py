@@ -141,13 +141,20 @@ def generate_batch(seed: int = SEED, n: int = 500) -> Batch:
             )
         )
 
+        # The books record what actually **settled**, not the gross sale: the
+        # gateway deducts its fee before the money lands, so booking gross
+        # would mean the ledger disagreed with the bank on every single clean
+        # transaction. Booking net is what makes an unexplained residual
+        # meaningful — it is the gap left *after* known fees are accounted for,
+        # which is the only thing worth escalating.
+        settled = amount - (mdr + gst if has_fee else 0)
         if status in (PaymentStatus.CAPTURED, PaymentStatus.REFUNDED):
             entries.append(
                 LedgerEntryRecord(
                     entry_id=f"le_{_token(rng)}",
                     order_id=order_id,
                     payment_id=payment_id,
-                    amount_paise=amount,
+                    amount_paise=settled,
                     entry_type="capture",
                     created_at=captured_at,
                 )
@@ -158,7 +165,7 @@ def generate_batch(seed: int = SEED, n: int = 500) -> Batch:
                     entry_id=f"le_{_token(rng)}",
                     order_id=order_id,
                     payment_id=payment_id,
-                    amount_paise=-amount,
+                    amount_paise=-settled,
                     entry_type="refund",
                     created_at=captured_at + timedelta(seconds=rng.randrange(3600, 86400)),
                 )

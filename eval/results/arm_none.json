@@ -5,9 +5,10 @@
   "detected": 0,
   "exceptions_count": 0,
   "false_positives": 0,
+  "hard_cases": 15,
   "injected": 124,
-  "inspections": 1000,
-  "invariant_delta_paise": -11502600,
+  "inspections": 1038,
+  "invariant_delta_paise": -11590241,
   "invariant_ok": false,
   "ledger_entries": 0,
   "llm_calls": 0,
@@ -30,14 +31,15 @@
       "injected": 31
     }
   },
+  "reason_codes": {},
   "records": 500,
   "repairs": {},
   "storage": "in-memory",
   "throughput": {
     "p50_us": 0,
     "p99_us": 0,
-    "records": 1000,
-    "wall_clock_us": 3554
+    "records": 1038,
+    "wall_clock_us": 2667
   },
   "transient_filtered": 0
 }

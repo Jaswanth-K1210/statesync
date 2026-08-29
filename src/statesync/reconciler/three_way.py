@@ -34,6 +34,8 @@ class ReconcileIndex:
 
     orders_by_payment: dict[str, list[Order]]
     entry_types: dict[str, set[str]]
+    booked_paise: dict[str, int]
+    """Sum of capture entries per payment — what the books say landed."""
 
 
 def build_index(batch: Batch) -> ReconcileIndex:
@@ -47,8 +49,13 @@ def build_index(batch: Batch) -> ReconcileIndex:
         if entry.payment_id is not None:
             entry_types[entry.payment_id].add(entry.entry_type)
 
+    booked: dict[str, int] = defaultdict(int)
+    for entry in batch.ledger_entries:
+        if entry.payment_id is not None and entry.entry_type == "capture":
+            booked[entry.payment_id] += entry.amount_paise
+
     return ReconcileIndex(orders_by_payment=dict(orders_by_payment),
-                          entry_types=dict(entry_types))
+                          entry_types=dict(entry_types), booked_paise=dict(booked))
 
 
 def reconcile(batch: Batch, now: datetime) -> list[Divergence]:
@@ -106,6 +113,21 @@ def reconcile_payment(
     # CAPTURED_NO_ORDER — money moved, the webhook never landed.
     if payment.status == PaymentStatus.CAPTURED and not orders:
         found.append(_divergence(DivergenceClass.CAPTURED_NO_ORDER, payment, None, now))
+
+    # AMOUNT_MISMATCH — the books disagree with the gateway by more than the
+    # fee explains. Known fee and tax are subtracted **deterministically and
+    # first**; only the residual left over is genuinely ambiguous, and only
+    # that residual is ever handed to the propose-verify layer.
+    if payment.status == PaymentStatus.CAPTURED and orders:
+        known = (payment.fee_paise or 0) + (payment.tax_paise or 0)
+        expected_net = orders[0].total_paise - known
+        residual = expected_net - index.booked_paise.get(pid, 0)
+        if residual != 0:
+            divergence = _divergence(DivergenceClass.AMOUNT_MISMATCH, payment,
+                                     orders[0].order_id, now)
+            divergence.detail["residual_paise"] = str(residual)
+            divergence.detail["known_paise"] = str(known)
+            found.append(divergence)
 
     # REFUND_NOT_REFLECTED — the gateway refunded, the books never heard.
     if payment.status == PaymentStatus.REFUNDED and "refund" not in index.entry_types.get(

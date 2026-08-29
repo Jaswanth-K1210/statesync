@@ -51,7 +51,8 @@ def check_ledger_invariant(batch: Batch) -> InvariantResult:
     expected = 0
     for payment in batch.payments:
         if payment.status == PaymentStatus.CAPTURED:
-            expected += payment.amount_paise
+            # Net of the gateway's fee, matching what the books record.
+            expected += payment.amount_paise - (payment.fee_paise or 0) - (payment.tax_paise or 0)
         elif payment.status == PaymentStatus.REFUNDED:
             expected += 0  # captured then returned: net zero on the books
 

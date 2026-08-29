@@ -328,3 +328,54 @@ def test_the_three_pass_proof_populates_every_column():
     assert third.repairs["already_applied"] == first.repairs["succeeded"]
     assert third.repairs["blocked"] == 0, "pass 3 was blocked, not deduped"
     assert third.repairs["writes"] == first.repairs["writes"]
+
+
+# ── hard cases in the eval ──────────────────────────────────────────────────
+
+def test_hard_cases_are_not_counted_as_false_positives():
+    """Hard-case detections are expected. Several have refusal as the correct
+    outcome, so merging them into the clean false-positive number would
+    misreport both."""
+    result = run_arm("rules", seed=SEED, n=200, rate=0.25, hard_cases=True)
+    assert result.hard_cases == 15
+    assert result.false_positives == 0
+
+
+def test_the_staleness_window_filters_a_transient_in_the_eval():
+    """`transient_filtered` is the direct evidence two-run confirmation works.
+
+    A late webhook lands between passes: the divergence is real when first
+    seen and gone before a repair could be authorised. Without a batch that
+    moves between passes this metric is a permanent zero however correct the
+    implementation is.
+    """
+    result = run_arm("rules", seed=SEED, n=200, rate=0.25, hard_cases=True)
+    assert result.transient_filtered > 0
+
+
+def test_every_confirmed_divergence_is_repaired_or_escalated_never_dropped():
+    """Nothing confirmed may vanish silently.
+
+    The gap between confirmed and repaired is exactly the count the policy
+    gate refused — under-determined classes escalate rather than guess, and
+    that difference must be accounted for rather than merely unexplained.
+    """
+    result = run_arm("rules", seed=SEED, n=200, rate=0.25, hard_cases=True, repair=True)
+    accounted = result.repairs["succeeded"] + result.repairs["escalated"]
+    assert accounted == result.confirmed
+    assert result.repairs["escalated"] > 0, "AMOUNT_MISMATCH must not be auto-repaired"
+
+
+def test_hard_cases_put_rows_in_the_exception_list(tmp_path):
+    """The clean batch legitimately has zero exceptions. This is what fills it."""
+    path = tmp_path / "exceptions.csv"
+    result = run_arm("rules", seed=SEED, n=200, rate=0.25, hard_cases=True,
+                     exceptions_path=path)
+    assert result.exceptions_count > 0
+    assert "no_hypothesis_verified" in path.read_text()
+
+
+def test_amount_mismatch_is_never_auto_repaired():
+    """Under-determined classes escalate rather than guess."""
+    result = run_arm("rules", seed=SEED, n=200, rate=0.25, hard_cases=True, repair=True)
+    assert result.repairs["escalated"] > 0

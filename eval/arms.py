@@ -23,12 +23,13 @@ from statesync.classifier.deterministic import classify
 from statesync.config import BASE_TIME, REDIS_URL, SEED, STALENESS_WINDOW
 from statesync.executor.runner import RepairRunner
 from statesync.executor.store import InMemoryRepairStore
-from statesync.generator.synthetic import generate_batch
-from statesync.injector.clean import inject_clean
+from statesync.generator.synthetic import Batch, generate_batch
+from statesync.injector.clean import InjectedBatch, inject_clean
+from statesync.injector.hard_cases import inject_hard_cases
 from statesync.ledger.chain import Ledger
 from statesync.metrics.throughput import Stopwatch, ThroughputReport
 from statesync.models.domain import Divergence
-from statesync.models.enums import DivergenceClass
+from statesync.models.enums import DivergenceClass, ReasonCode
 from statesync.policy.blast_radius import BlastRadiusCap
 from statesync.policy.gates import PolicyGate
 from statesync.reconciler.invariants import check_ledger_invariant
@@ -63,6 +64,8 @@ class ArmResult:
     invariant_delta_paise: int
     throughput: ThroughputReport
     repairs: dict[str, int] = field(default_factory=dict)
+    hard_cases: int = 0
+    reason_codes: dict[str, int] = field(default_factory=dict)
     storage: str = "in-memory"
     """What the throughput figure was measured against.
 
@@ -127,6 +130,8 @@ class ArmResult:
             "invariant_ok": self.invariant_ok,
             "storage": self.storage,
             "repairs": dict(sorted(self.repairs.items())),
+            "hard_cases": self.hard_cases,
+            "reason_codes": dict(sorted(self.reason_codes.items())),
             "inspections": self.inspections,
             "invariant_delta_paise": self.invariant_delta_paise,
             "per_class": {k.value: v for k, v in sorted(self.per_class.items())},
@@ -143,6 +148,7 @@ def run_arm(
     repair: bool = False,
     blast_radius: int = 200,
     runner: RepairRunner | None = None,
+    hard_cases: bool = False,
 ) -> ArmResult:
     """Run one arm over a freshly generated, freshly injected batch."""
     if arm not in ARMS:
@@ -153,6 +159,19 @@ def run_arm(
         )
 
     injected = inject_clean(generate_batch(seed=seed, n=n), seed=seed, rate=rate)
+    hard_case_count = 0
+    hard_payment_ids: set[str] = set()
+    late_arrivals: list[Any] = []
+    if hard_cases:
+        # Hard-case timestamps are relative to the reconciliation clock, so
+        # case 12's in-flight payment actually lands inside the staleness
+        # window and `transient_filtered` becomes a measured number instead of
+        # a permanent zero. See docs/PHASE_4_REQUIREMENTS.md.
+        hard = inject_hard_cases(injected.batch, seed=seed, now=_RECONCILED_AT)
+        injected = InjectedBatch(batch=hard.batch, injections=injected.injections)
+        hard_case_count = len(hard.cases)
+        hard_payment_ids = hard.payment_ids | {"pay_hc16"}
+        late_arrivals = list(hard.late_arrivals)
     # A caller may pass an existing runner to re-run the same batch against
     # state that already has the repairs in it — that is how the "running it
     # twice writes nothing" claim is exercised end to end.
@@ -171,6 +190,8 @@ def run_arm(
     misclassified = 0
     confirmed_total = 0
     unresolved: list[Divergence] = []
+    reasons: dict[str, ReasonCode] = {}
+    all_found: list[Divergence] = []
 
     for pass_no in range(passes):
         now = _RECONCILED_AT + STALENESS_WINDOW * 2 * pass_no
@@ -192,12 +213,24 @@ def run_arm(
         for divergence in found:
             key = divergence.deterministic_key()
             if pass_no == 0:
+                all_found.append(divergence)
                 detected_keys.add(key)
                 result = classify(divergence)
                 if key in truth and truth[key] != result.klass:
                     misclassified += 1
                 if result.resolved_by != "rules":
                     unresolved.append(divergence)
+                    reasons[key] = result.reason_code
+
+        # The late webhook lands between passes, so pass 2 sees a batch that
+        # has moved on — as a real one would.
+        if late_arrivals and pass_no == 0:
+            injected = InjectedBatch(
+                batch=Batch(seed=injected.batch.seed, payments=injected.batch.payments,
+                            orders=[*injected.batch.orders, *late_arrivals],
+                            ledger_entries=injected.batch.ledger_entries),
+                injections=injected.injections,
+            )
 
         confirmed = tracker.observe(found, now=now)
         confirmed_total += len(confirmed)
@@ -216,13 +249,18 @@ def run_arm(
     detected_count = len(detected_keys & set(truth))
     count = (
         write_exceptions_csv(
-            exceptions_path, exceptions,
+            exceptions_path, exceptions, reasons=reasons,
             detected=detected_count,
-            context=f"arm={arm}, seed={seed}, clean-only batch",
+            context=f"arm={arm}, seed={seed}, "
+                    f"{'with hard cases' if hard_cases else 'clean-only batch'}",
         )
         if exceptions_path is not None
         else len(exceptions)
     )
+
+    hard_case_keys = {
+        d.deterministic_key() for d in all_found if d.payment_id in hard_payment_ids
+    }
 
     per_class: dict[DivergenceClass, dict[str, int]] = {}
     for key, klass in truth.items():
@@ -237,7 +275,13 @@ def run_arm(
         injected=len(truth),
         detected=len(detected_keys & set(truth)),
         misclassified=misclassified,
-        false_positives=len(detected_keys - set(truth)),
+        # Hard-case detections are expected, not false positives: they are
+        # scored separately (several have refusal as the correct outcome), so
+        # merging them into this number would misreport both.
+        false_positives=len({
+            k for k in detected_keys - set(truth)
+            if k not in hard_case_keys
+        }),
         confirmed=confirmed_total,
         transient_filtered=tracker.transient_filtered,
         exceptions_count=count,
@@ -249,6 +293,9 @@ def run_arm(
         throughput=watch.report(),
         per_class=per_class,
         repairs=runner.summary() if runner is not None else {},
+        hard_cases=hard_case_count,
+        reason_codes={r.value: sum(1 for v in reasons.values() if v == r)
+                      for r in {*reasons.values()}},
     )
 
 

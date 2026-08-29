@@ -80,9 +80,20 @@ def render(results: list[ArmResult], include_timing: bool = True) -> str:
             short = -rules.invariant_delta_paise
             w(f"  {'ledger invariant: books short (paise)':<44}{short:>14,}")
         w(f"  {'divergences confirmed (2 passes)':<44}{rules.confirmed:>14,}")
-        w(f"  {'transient divergences filtered':<44}{rules.transient_filtered:>14,}")
         w(f"  {'unresolved exceptions':<44}{rules.exceptions_count:>14,}")
         w("")
+        if rules.hard_cases:
+            w("  Hard cases — reported separately")
+            w("  " + "-" * 74)
+            w(f"  {'ambiguous cases injected':<44}{rules.hard_cases:>14,}")
+            for code, count in sorted(rules.reason_codes.items()):
+                w(f"  {'escalated: ' + code:<44}{count:>14,}")
+            w(f"  {'transient divergences filtered':<44}{rules.transient_filtered:>14,}")
+            w("")
+            w("  Cases 7, 13 and 14 are scored on correct refusal, not detection.")
+            w("  A miss on a clean case is a failure; on those three, declining to")
+            w("  act IS the right answer.")
+            w("")
         if rules.repairs:
             rep = rules.repairs
             w("  Repairs")
@@ -145,6 +156,7 @@ def main(argv: list[str] | None = None) -> int:
 
     results = [
         run_arm(arm, seed=args.seed, n=args.n, rate=args.rate, repair=(arm == "rules"),
+                hard_cases=True,
                 exceptions_path=PROJECT_ROOT / "exceptions.csv" if arm == "rules" else None)
         for arm in arms
     ]
@@ -155,12 +167,12 @@ def main(argv: list[str] | None = None) -> int:
     if not args.arm or args.arm == "rules":
         runner = make_repair_runner(flush=True)
         first = run_arm("rules", seed=args.seed, n=args.n, rate=args.rate,
-                        repair=True, runner=runner)
+                        repair=True, runner=runner, hard_cases=True)
         second = run_arm("rules", seed=args.seed, n=args.n, rate=args.rate,
-                         repair=True, runner=runner)
+                         repair=True, runner=runner, hard_cases=True)
         runner.redis.flushall()
         third = run_arm("rules", seed=args.seed, n=args.n, rate=args.rate,
-                        repair=True, runner=runner)
+                        repair=True, runner=runner, hard_cases=True)
         print(render_idempotency([  # noqa: T201
             ("1 · first run", first.repairs),
             ("2 · identical re-run", second.repairs),

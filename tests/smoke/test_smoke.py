@@ -219,3 +219,71 @@ def test_s3_the_blast_radius_cap_holds():
                      repair=True, blast_radius=3)
     assert capped.repairs["succeeded"] == 3
     assert capped.repairs["blocked"] > 0
+
+
+# ── S4 · refusal ────────────────────────────────────────────────────────────
+# The three cases where declining to act is the correct outcome. These are
+# what a reviewer looks for.
+
+def test_s4_case_07_two_legitimate_orders_are_not_merged():
+    """Same customer, same amount, two seconds apart, two real payments."""
+    from statesync.generator.synthetic import generate_batch
+    from statesync.injector.hard_cases import inject_hard_cases
+    from statesync.models.enums import DivergenceClass
+    from statesync.reconciler.three_way import reconcile
+
+    now = datetime(2026, 10, 1, tzinfo=UTC)
+    hard = inject_hard_cases(generate_batch(seed=SEED, n=40), seed=SEED, now=now)
+    case = hard.case("case_07")
+
+    merges = [d for d in reconcile(hard.batch, now=now)
+              if d.payment_id in case.payment_ids
+              and d.klass == DivergenceClass.DUPLICATE_ORDER]
+    assert merges == [], "two legitimate orders were merged"
+
+
+def test_s4_case_13_two_verified_hypotheses_escalate_as_ambiguous():
+    from statesync.generator.synthetic import generate_batch
+    from statesync.injector.hard_cases import inject_hard_cases
+    from statesync.models.enums import ReasonCode
+
+    now = datetime(2026, 10, 1, tzinfo=UTC)
+    hard = inject_hard_cases(generate_batch(seed=SEED, n=40), seed=SEED, now=now)
+    packet = hard.packet_for("case_13")
+
+    assert packet.reason_code == ReasonCode.AMBIGUOUS_MULTIPLE_VERIFIED
+    assert len(packet.verified) == 2
+
+
+def test_s4_case_14_escalates_with_every_hypothesis_and_its_arithmetic():
+    from statesync.classifier.escalation import FORBIDDEN_PHRASES
+    from statesync.generator.synthetic import generate_batch
+    from statesync.injector.hard_cases import inject_hard_cases
+    from statesync.models.enums import ReasonCode
+
+    now = datetime(2026, 10, 1, tzinfo=UTC)
+    hard = inject_hard_cases(generate_batch(seed=SEED, n=40), seed=SEED, now=now)
+    packet = hard.packet_for("case_14")
+
+    assert packet.reason_code == ReasonCode.NO_HYPOTHESIS_VERIFIED
+    assert len(packet.hypotheses) >= 5
+    assert all(h.arithmetic_shown and h.rejection_reason for h in packet.hypotheses)
+    text = packet.suggested_action.lower()
+    assert not [p for p in FORBIDDEN_PHRASES if p in text]
+
+
+def test_s4_the_exception_list_has_reason_codes():
+    import tempfile
+    from pathlib import Path as _Path
+
+    from eval.arms import run_arm
+
+    from statesync.reporting.exceptions_csv import EXCEPTION_COLUMNS
+
+    with tempfile.TemporaryDirectory() as tmp:
+        path = _Path(tmp) / "exceptions.csv"
+        result = run_arm("rules", seed=SEED, n=50, rate=0.25, hard_cases=True,
+                         exceptions_path=path)
+        assert result.exceptions_count > 0
+        assert path.read_text().splitlines()[1] == ",".join(EXCEPTION_COLUMNS)
+        assert "no_hypothesis_verified" in path.read_text()
