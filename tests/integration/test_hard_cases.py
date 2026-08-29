@@ -338,3 +338,12 @@ def test_the_eval_reports_provider_calls():
     result = run_arm("rules", seed=SEED, n=60, rate=0.25, hard_cases=True)
     assert result.llm_calls > 0
     assert result.llm_calls <= 2 * result.reason_codes_total
+
+
+def test_payment_ids_covers_auxiliary_payments_not_just_numbered_cases(injected):
+    """The late arrival and the unpriceable instrument belong to no numbered
+    case. Keying the exclusion set off the case registry left them out, and
+    they were then counted as false positives."""
+    assert "pay_hc16" in injected.payment_ids
+    assert "pay_hc17" in injected.payment_ids
+    assert injected.payment_ids >= {p for c in injected.cases for p in c.payment_ids}

@@ -225,3 +225,52 @@ def test_the_window_boundary_is_exclusive(batch):
     now = LATER
     exact = _authorized_pair(batch, order_age=ORDER_TIMEOUT, auth_age=ORDER_TIMEOUT, now=now)
     assert reconcile(exact, now=now) == []
+
+
+# ── the schedule is an estimate, not a source of truth ──────────────────────
+
+def test_an_unbooked_fee_is_not_a_divergence_when_the_fee_was_only_estimated():
+    """The subtle false positive gross booking exposed.
+
+    A payment with no gateway fee data and no merchant fee line: the schedule
+    can estimate what the fee *would* be, but nothing authoritative says what
+    it *was*. Comparing books against an estimate flags every unbooked-fee
+    payment as a divergence, which is guessing by the back door.
+    """
+    batch = generate_batch(seed=SEED, n=300)
+    unpriced = {p.payment_id for p in batch.payments if p.fee_paise is None}
+    assert unpriced, "the generator should leave some payments unpriced"
+
+    flagged = {d.payment_id for d in reconcile(batch, now=LATER)
+               if d.klass == DivergenceClass.AMOUNT_MISMATCH}
+    assert not flagged & unpriced
+
+
+def test_a_gateway_reported_fee_that_disagrees_with_the_books_is_a_divergence():
+    """The other half: an authoritative fee that the books contradict."""
+    from statesync.generator.synthetic import Batch as _Batch
+
+    batch = generate_batch(seed=SEED, n=120)
+    fee_entry = next(e for e in batch.ledger_entries
+                     if e.entry_type == "fee" and e.amount_paise != 0)
+    tampered = [
+        e.model_copy(update={"amount_paise": e.amount_paise - 60})
+        if e.entry_id == fee_entry.entry_id else e
+        for e in batch.ledger_entries
+    ]
+    broken = _BatchLike = _Batch(seed=batch.seed, payments=batch.payments,
+                                 orders=batch.orders, ledger_entries=tampered)
+    found = [d for d in reconcile(broken, now=LATER)
+             if d.payment_id == fee_entry.payment_id]
+    assert [d.klass for d in found] == [DivergenceClass.AMOUNT_MISMATCH]
+    assert found[0].detail["residual_paise"] == "60"
+
+
+def test_an_unpriceable_instrument_escalates_rather_than_being_ignored():
+    from statesync.injector.hard_cases import inject_hard_cases
+
+    hard = inject_hard_cases(generate_batch(seed=SEED, n=40), seed=SEED, now=LATER)
+    found = [d for d in reconcile(hard.batch, now=LATER) if d.payment_id == "pay_hc17"]
+    assert len(found) == 1
+    assert found[0].detail["fee_source"] == "unknown"
+    assert "crypto_voucher" in found[0].detail["needed_config"]

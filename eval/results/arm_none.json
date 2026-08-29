@@ -5,10 +5,13 @@
   "detected": 0,
   "exceptions_count": 0,
   "false_positives": 0,
+  "fee_coverage_bps": 0,
+  "fee_priced": 0,
+  "fee_unpriced": 0,
   "hard_cases": 15,
   "injected": 124,
-  "inspections": 1038,
-  "invariant_delta_paise": -11590241,
+  "inspections": 1040,
+  "invariant_delta_paise": -18253746,
   "invariant_ok": false,
   "ledger_entries": 0,
   "llm_calls": 0,
@@ -16,19 +19,23 @@
   "per_class": {
     "captured_no_order": {
       "detected": 0,
-      "injected": 31
+      "injected": 31,
+      "rate_bps": 0
     },
     "duplicate_order": {
       "detected": 0,
-      "injected": 31
+      "injected": 31,
+      "rate_bps": 0
     },
     "order_no_capture": {
       "detected": 0,
-      "injected": 31
+      "injected": 31,
+      "rate_bps": 0
     },
     "refund_not_reflected": {
       "detected": 0,
-      "injected": 31
+      "injected": 31,
+      "rate_bps": 0
     }
   },
   "reason_codes": {},
@@ -38,8 +45,8 @@
   "throughput": {
     "p50_us": 0,
     "p99_us": 0,
-    "records": 1038,
-    "wall_clock_us": 3238
+    "records": 1040,
+    "wall_clock_us": 8559
   },
   "transient_filtered": 0
 }

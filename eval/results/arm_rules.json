@@ -1,38 +1,46 @@
 {
   "arm": "rules",
   "chain_ok": true,
-  "confirmed": 133,
+  "confirmed": 134,
   "detected": 124,
-  "exceptions_count": 6,
+  "exceptions_count": 7,
   "false_positives": 0,
+  "fee_coverage_bps": 8571,
+  "fee_priced": 6,
+  "fee_unpriced": 1,
   "hard_cases": 15,
   "injected": 124,
-  "inspections": 1038,
-  "invariant_delta_paise": -11590241,
+  "inspections": 1040,
+  "invariant_delta_paise": -18253746,
   "invariant_ok": false,
-  "ledger_entries": 284,
+  "ledger_entries": 286,
   "llm_calls": 11,
   "misclassified": 0,
   "per_class": {
     "captured_no_order": {
       "detected": 31,
-      "injected": 31
+      "injected": 31,
+      "rate_bps": 10000
     },
     "duplicate_order": {
       "detected": 31,
-      "injected": 31
+      "injected": 31,
+      "rate_bps": 10000
     },
     "order_no_capture": {
       "detected": 31,
-      "injected": 31
+      "injected": 31,
+      "rate_bps": 10000
     },
     "refund_not_reflected": {
       "detected": 31,
-      "injected": 31
+      "injected": 31,
+      "rate_bps": 10000
     }
   },
   "reason_codes": {
     "ambiguous_multiple_verified": 1,
+    "fee_schedule_unknown": 1,
     "no_hypothesis_verified": 5
   },
   "records": 500,
@@ -41,7 +49,7 @@
     "blast_radius_blocked": 0,
     "blast_radius_used": 127,
     "blocked": 0,
-    "escalated": 6,
+    "escalated": 7,
     "failed": 0,
     "replayed": 0,
     "succeeded": 127,
@@ -49,10 +57,10 @@
   },
   "storage": "in-memory",
   "throughput": {
-    "p50_us": 1,
-    "p99_us": 16,
-    "records": 1038,
-    "wall_clock_us": 227447
+    "p50_us": 4,
+    "p99_us": 32,
+    "records": 1040,
+    "wall_clock_us": 185842
   },
   "transient_filtered": 1
 }

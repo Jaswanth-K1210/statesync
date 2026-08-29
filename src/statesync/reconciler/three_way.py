@@ -14,6 +14,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime
 
+from statesync.classifier.fees import FeeSchedule, FeeSource, load_fee_schedule, resolve_fee
 from statesync.config import ORDER_TIMEOUT
 from statesync.generator.synthetic import Batch
 from statesync.models.domain import Divergence, Order, Payment
@@ -37,6 +38,9 @@ class ReconcileIndex:
     booked_paise: dict[str, int]
     """revenue + fee_expense per payment — what the books say actually landed."""
 
+    has_fee_line: dict[str, bool]
+    """Whether the merchant booked a fee expense for this payment at all."""
+
 
 def build_index(batch: Batch) -> ReconcileIndex:
     orders_by_payment: dict[str, list[Order]] = defaultdict(list)
@@ -54,8 +58,25 @@ def build_index(batch: Batch) -> ReconcileIndex:
         if entry.payment_id is not None and entry.entry_type in ("capture", "fee"):
             booked[entry.payment_id] += entry.amount_paise
 
-    return ReconcileIndex(orders_by_payment=dict(orders_by_payment),
-                          entry_types=dict(entry_types), booked_paise=dict(booked))
+    fee_lines = {
+        e.payment_id for e in batch.ledger_entries
+        if e.payment_id is not None and e.entry_type == "fee"
+    }
+
+    return ReconcileIndex(
+        orders_by_payment=dict(orders_by_payment), entry_types=dict(entry_types),
+        booked_paise=dict(booked), has_fee_line={pid: True for pid in fee_lines},
+    )
+
+
+_DEFAULT_SCHEDULE: FeeSchedule | None = None
+
+
+def _schedule() -> FeeSchedule:
+    global _DEFAULT_SCHEDULE
+    if _DEFAULT_SCHEDULE is None:
+        _DEFAULT_SCHEDULE = load_fee_schedule()
+    return _DEFAULT_SCHEDULE
 
 
 def reconcile(batch: Batch, now: datetime) -> list[Divergence]:
@@ -64,14 +85,16 @@ def reconcile(batch: Batch, now: datetime) -> list[Divergence]:
     Deterministic in input order, so two runs produce identical output.
     """
     index = build_index(batch)
+    schedule = _schedule()
     found: list[Divergence] = []
     for payment in batch.payments:
-        found.extend(reconcile_payment(payment, index, now))
+        found.extend(reconcile_payment(payment, index, now, schedule))
     return found
 
 
 def reconcile_payment(
-    payment: Payment, index: ReconcileIndex, now: datetime
+    payment: Payment, index: ReconcileIndex, now: datetime,
+    schedule: FeeSchedule | None = None,
 ) -> list[Divergence]:
     """Reconcile exactly one payment against the other two views."""
     found: list[Divergence] = []
@@ -123,15 +146,38 @@ def reconcile_payment(
     # fee the merchant booked and the fee the gateway actually charged, which
     # has causes an ops person can act on rather than an abstract shortfall.
     if payment.status == PaymentStatus.CAPTURED and orders:
-        known = (payment.fee_paise or 0) + (payment.tax_paise or 0)
-        expected_net = orders[0].total_paise - known
-        residual = expected_net - index.booked_paise.get(pid, 0)
-        if residual != 0:
+        fee = resolve_fee(payment, schedule or _schedule(), at=now)
+        if fee.source == FeeSource.UNKNOWN:
+            # Never assume zero. Treating a missing fee as nothing manufactures
+            # a residual that never existed and hands the propose-verify layer
+            # a fabricated problem to solve.
             divergence = _divergence(DivergenceClass.AMOUNT_MISMATCH, payment,
                                      orders[0].order_id, now)
-            divergence.detail["residual_paise"] = str(residual)
-            divergence.detail["known_paise"] = str(known)
+            divergence.detail["fee_source"] = fee.source.value
+            divergence.detail["needed_config"] = fee.needed_config
+            divergence.detail["residual_paise"] = "0"
+            divergence.detail["known_paise"] = "0"
             found.append(divergence)
+        elif fee.source == FeeSource.SCHEDULE and not index.has_fee_line.get(pid, False):
+            # The schedule is an *estimate*, for validation and settlement-level
+            # attribution — not a source of truth about what the gateway
+            # actually charged. The merchant booked no fee line and the gateway
+            # reported no fee, so there is nothing authoritative to compare.
+            # Asserting a discrepancy from an estimated rate would be guessing
+            # by the back door, and it would flag every unbooked-fee payment as
+            # a divergence when the likeliest cause is simply timing.
+            pass
+        else:
+            known = fee.total_paise or 0
+            expected_net = orders[0].total_paise - known
+            residual = expected_net - index.booked_paise.get(pid, 0)
+            if residual != 0:
+                divergence = _divergence(DivergenceClass.AMOUNT_MISMATCH, payment,
+                                         orders[0].order_id, now)
+                divergence.detail["residual_paise"] = str(residual)
+                divergence.detail["known_paise"] = str(known)
+                divergence.detail["fee_source"] = fee.source.value
+                found.append(divergence)
 
     # REFUND_NOT_REFLECTED — the gateway refunded, the books never heard.
     if payment.status == PaymentStatus.REFUNDED and "refund" not in index.entry_types.get(

@@ -70,6 +70,9 @@ class ArmResult:
     hard_cases: int = 0
     reason_codes: dict[str, int] = field(default_factory=dict)
     reason_codes_total: int = 0
+    fee_coverage_bps: int = 0
+    fee_priced: int = 0
+    fee_unpriced: int = 0
     storage: str = "in-memory"
     """What the throughput figure was measured against.
 
@@ -136,6 +139,9 @@ class ArmResult:
             "repairs": dict(sorted(self.repairs.items())),
             "hard_cases": self.hard_cases,
             "reason_codes": dict(sorted(self.reason_codes.items())),
+            "fee_coverage_bps": self.fee_coverage_bps,
+            "fee_priced": self.fee_priced,
+            "fee_unpriced": self.fee_unpriced,
             "inspections": self.inspections,
             "invariant_delta_paise": self.invariant_delta_paise,
             "per_class": {k.value: v for k, v in sorted(self.per_class.items())},
@@ -176,7 +182,7 @@ def run_arm(
         hard = inject_hard_cases(injected.batch, seed=seed, now=_RECONCILED_AT)
         injected = InjectedBatch(batch=hard.batch, injections=injected.injections)
         hard_case_count = len(hard.cases)
-        hard_payment_ids = hard.payment_ids | {"pay_hc16"}
+        hard_payment_ids = hard.payment_ids
         late_arrivals = list(hard.late_arrivals)
         provider = hard.provider
         artifacts = hard.artifacts
@@ -233,9 +239,14 @@ def run_arm(
                     # packet knows whether two hypotheses verified, and
                     # mislabelling case 13 in the exception list would hide
                     # the most interesting row in the file.
-                    reasons[key] = _escalation_reason(
-                        divergence, provider, artifacts, ledger, result.reason_code
-                    )
+                    if divergence.detail.get("fee_source") == "unknown":
+                        # Priced nothing, so nothing can be verified. Escalate
+                        # with the config that would resolve it.
+                        reasons[key] = ReasonCode.FEE_SCHEDULE_UNKNOWN
+                    else:
+                        reasons[key] = _escalation_reason(
+                            divergence, provider, artifacts, ledger, result.reason_code
+                        )
 
         # The late webhook lands between passes, so pass 2 sees a batch that
         # has moved on — as a real one would.
@@ -272,6 +283,13 @@ def run_arm(
         if exceptions_path is not None
         else len(exceptions)
     )
+
+    # Fee-schedule coverage: of the payments an amount check applies to, how
+    # many could be priced at all. Reporting verification without this is how
+    # a system claims 95% while silently escalating the 40% it could not price.
+    unpriced = len([d for d in all_found if d.detail.get("fee_source") == "unknown"])
+    priced = len([d for d in all_found if d.detail.get("fee_source")
+                  and d.detail["fee_source"] != "unknown"])
 
     hard_case_keys = {
         d.deterministic_key() for d in all_found if d.payment_id in hard_payment_ids
@@ -321,6 +339,9 @@ def run_arm(
         reason_codes={r.value: sum(1 for v in reasons.values() if v == r)
                       for r in {*reasons.values()}},
         reason_codes_total=len(reasons),
+        fee_priced=priced,
+        fee_unpriced=unpriced,
+        fee_coverage_bps=(priced * 10_000 // (priced + unpriced)) if (priced + unpriced) else 0,
     )
 
 

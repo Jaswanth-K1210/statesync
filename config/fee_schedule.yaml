@@ -1,0 +1,26 @@
+# Merchant fee schedule. Used only when the payment object carries no fee.
+#
+# Versioned with effective dates: a rate that was not yet in force is never
+# applied retroactively, because doing so would manufacture a residual that
+# never existed. An instrument absent from this file resolves to
+# FEE_SCHEDULE_UNKNOWN and escalates — the system never guesses a rate.
+
+version: 3
+effective_from: 2026-04-01
+rates:
+  upi:
+    mdr_bps: 0
+    gst_bps: 1800
+  card_domestic:
+    mdr_bps: 200
+    gst_bps: 1800
+  card_intl:
+    mdr_bps: 300
+    gst_bps: 1800
+  emi:
+    mdr_bps: 250
+    gst_bps: 1800
+addons:
+  instant_settlement:
+    pct_bps: 30
+    gst_bps: 1800

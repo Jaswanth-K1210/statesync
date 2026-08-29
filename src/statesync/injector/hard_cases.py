@@ -85,6 +85,14 @@ class HardCaseBatch:
     batch: Batch
     cases: list[HardCase]
     packets: dict[str, EscalationPacket]
+    injected_payment_ids: frozenset[str] = frozenset()
+    """Every payment this injector created, numbered case or not.
+
+    Derived from what was built rather than from the case registry: auxiliary
+    payments (the late arrival, the unpriceable instrument) belong to no
+    numbered case, and keying off the registry silently left them out of the
+    exclusion set — where they were then counted as false positives."""
+
     provider: FixtureHypothesisProvider | None = None
     """Proposals for the ambiguous cases, keyed by payment id.
 
@@ -110,7 +118,9 @@ class HardCaseBatch:
         clean case is a detection failure, while for cases 7, 13 and 14 the
         correct outcome *is* refusal, so they are scored differently.
         """
-        return {pid for case in self.cases for pid in case.payment_ids}
+        return set(self.injected_payment_ids) | {
+            pid for case in self.cases for pid in case.payment_ids
+        }
 
     def case(self, case_id: str) -> HardCase:
         return next(c for c in self.cases if c.case_id == case_id)
@@ -130,6 +140,7 @@ class _Builder:
         self.now = now
         self.rng = rng
         self.cases: list[HardCase] = []
+        self.created: set[str] = set()
         self.artifacts = ArtifactIndex(
             {p.payment_id for p in source.payments} | {"stl_hard", "rfnd_hard"}
         )
@@ -149,6 +160,7 @@ class _Builder:
         )
         self.payments.append(payment)
         self.artifacts.add(pid)
+        self.created.add(pid)
         return payment
 
     def order(self, oid: str, pid: str | None, *, total: int, age: timedelta,
@@ -334,6 +346,15 @@ def inject_hard_cases(batch: Batch, seed: int = SEED, now: datetime | None = Non
                        customer_id="cust_late", total_paise=210_000,
                        status="confirmed", created_at=now - OLD, line_items_count=2)
 
+    # An instrument the fee schedule does not cover and the payment object
+    # does not price. The correct outcome is FEE_SCHEDULE_UNKNOWN: the system
+    # names the config that would resolve it rather than assuming a rate.
+    b.payment("pay_hc17", amount=275_000, status=PaymentStatus.CAPTURED, age=OLD,
+              instrument="crypto_voucher")
+    b.order("order_hc17", "pay_hc17", total=275_000, age=OLD)
+    b.entry("le_hc17", "pay_hc17", "order_hc17", amount=275_000, kind="capture", age=OLD)
+    b.entry("le_hc17f", "pay_hc17", "order_hc17", amount=-6_000, kind="fee", age=OLD)
+
     packets, provider = _build_packets(b)
     return HardCaseBatch(
         batch=Batch(seed=b.seed, payments=b.payments, orders=b.orders,
@@ -341,6 +362,7 @@ def inject_hard_cases(batch: Batch, seed: int = SEED, now: datetime | None = Non
         cases=b.cases,
         packets=packets,
         late_arrivals=(late_order,),
+        injected_payment_ids=frozenset(b.created),
         provider=provider,
         artifacts=b.artifacts,
     )
