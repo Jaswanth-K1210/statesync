@@ -49,6 +49,7 @@ class Verdict(StrEnum):
     ARITHMETIC_FAILED = "ARITHMETIC_FAILED"
     ARTIFACT_MISSING = "ARTIFACT_MISSING"
     RANGE_VIOLATION = "RANGE_VIOLATION"
+    RATE_INCONSISTENT = "RATE_INCONSISTENT"
 
 
 class Component(BaseModel):
@@ -131,11 +132,21 @@ def verify(
     residual_paise: int,
     artifacts: ArtifactIndex,
     label: str = "H1",
+    base_paise: int | None = None,
 ) -> Hypothesis:
     """Accept or reject one proposal. Deterministic, total, no I/O.
 
-    Checks run in a fixed order — arithmetic, then citations, then ranges — so
-    an ops person reading a rejection fixes the sum before chasing a citation.
+    Checks run in a fixed order — arithmetic, citations, ranges, then rate
+    consistency — so an ops person reading a rejection fixes the sum before
+    chasing a citation.
+
+    The last check matters more than it looks. Verifying only that a rate is
+    *in range* lets a decomposition claim "MDR at 2%" for an amount that is
+    nothing like 2% of the payment: the sum reconciles, the artifact exists,
+    the rate is plausible, and the explanation is still fiction. That is the
+    coincidental fit bounded search is meant to avoid, and range checking alone
+    does not catch it. When `base_paise` is known, a declared rate must
+    reproduce its own amount.
     """
     total = sum(c.amount_paise for c in proposal.components)
     matched = total == residual_paise
@@ -181,5 +192,24 @@ def verify(
                 f"component '{component.name}' claims {component.rate_bps / 100:.1f}%, "
                 f"permitted range is {low / 100:.1f}%-{high / 100:.1f}%",
             )
+
+    if base_paise is not None:
+        by_name = {c.name: c for c in proposal.components}
+        for component in proposal.components:
+            if component.rate_bps is None:
+                continue
+            # GST is charged on the fee, not on the transaction, so it is
+            # checked against the MDR component when one is present.
+            base = base_paise
+            if component.name == "gst" and "mdr" in by_name:
+                base = by_name["mdr"].amount_paise
+            expected = base * component.rate_bps // 10_000
+            if component.amount_paise != expected:
+                return result(
+                    Verdict.RATE_INCONSISTENT,
+                    f"component '{component.name}' claims "
+                    f"{component.rate_bps / 100:.2f}% of {base} paise, which is "
+                    f"{expected} paise, but declares {component.amount_paise}",
+                )
 
     return result(Verdict.VERIFIED)

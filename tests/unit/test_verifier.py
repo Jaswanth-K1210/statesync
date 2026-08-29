@@ -170,3 +170,60 @@ def test_every_hypothesis_shows_its_arithmetic():
     h = verify(proposal(comp("a", 500), comp("b", 400)), residual_paise=1140,
                artifacts=ARTIFACTS)
     assert h.arithmetic_shown == "500 + 400 = 900"
+
+
+# ── a declared rate must be consistent with its own amount ──────────────────
+# Checking only that a rate is in range lets a decomposition claim "MDR at 2%"
+# for an amount that is nothing like 2% of the payment. The arithmetic sums,
+# the artifact exists, the rate is plausible — and the explanation is still
+# fiction. This is the coincidental fit that bounded search is meant to avoid,
+# and range checking alone does not catch it.
+
+def test_a_component_whose_amount_contradicts_its_declared_rate_is_rejected():
+    h = verify(proposal(comp("mdr", 1140, rate_bps=200)), residual_paise=1140,
+               artifacts=ARTIFACTS, base_paise=400_000)
+    assert h.verdict == Verdict.RATE_INCONSISTENT
+
+
+def test_a_component_whose_amount_matches_its_declared_rate_is_accepted():
+    # 2% of 400000 = 8000
+    h = verify(proposal(comp("mdr", 8000, rate_bps=200)), residual_paise=8000,
+               artifacts=ARTIFACTS, base_paise=400_000)
+    assert h.verdict == Verdict.VERIFIED
+
+
+def test_the_rate_check_names_what_it_expected():
+    h = verify(proposal(comp("mdr", 1140, rate_bps=200)), residual_paise=1140,
+               artifacts=ARTIFACTS, base_paise=400_000)
+    assert "8000" in h.rejection_reason and "1140" in h.rejection_reason
+
+
+def test_the_rate_check_is_skipped_without_a_base_amount():
+    """Settlement-level attribution has no single base to check against."""
+    h = verify(proposal(comp("mdr", 1140, rate_bps=200)), residual_paise=1140,
+               artifacts=ARTIFACTS)
+    assert h.verdict == Verdict.VERIFIED
+
+
+def test_a_component_with_no_declared_rate_is_unaffected():
+    h = verify(proposal(comp("adjustment", 1140)), residual_paise=1140,
+               artifacts=ARTIFACTS, base_paise=400_000)
+    assert h.verdict == Verdict.VERIFIED
+
+
+def test_gst_is_checked_against_the_fee_not_the_payment():
+    """GST is a percentage of the MDR, not of the transaction."""
+    # MDR 8000 at 2% of 400000; GST 1440 at 18% of 8000.
+    h = verify(
+        proposal(comp("mdr", 8000, rate_bps=200), comp("gst", 1440, rate_bps=1800)),
+        residual_paise=9440, artifacts=ARTIFACTS, base_paise=400_000,
+    )
+    assert h.verdict == Verdict.VERIFIED
+
+
+def test_a_wrong_gst_on_a_right_mdr_is_rejected():
+    h = verify(
+        proposal(comp("mdr", 8000, rate_bps=200), comp("gst", 9000, rate_bps=1800)),
+        residual_paise=17000, artifacts=ARTIFACTS, base_paise=400_000,
+    )
+    assert h.verdict == Verdict.RATE_INCONSISTENT

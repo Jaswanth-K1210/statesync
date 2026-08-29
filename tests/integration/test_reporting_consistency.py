@@ -89,7 +89,7 @@ def test_the_ledger_records_as_many_confirmations_as_the_run_reports(run):
 def test_provider_calls_are_bounded_by_the_escalation_count(run):
     """The published bound, checked against the reported numbers."""
     result, _ = run
-    assert result.llm_calls <= 2 * result.reason_codes_total
+    assert result.provider_calls <= 2 * result.reason_codes_total
 
 
 def test_the_rendered_report_quotes_the_same_numbers_as_the_result(run):

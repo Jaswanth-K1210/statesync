@@ -1,7 +1,7 @@
 {
-  "arm": "rules",
+  "arm": "full",
   "chain_ok": true,
-  "client_kind": "",
+  "client_kind": "offline",
   "confirmed": 134,
   "degraded": false,
   "detected": 124,
@@ -48,23 +48,13 @@
     "no_hypothesis_verified": 5
   },
   "records": 500,
-  "repairs": {
-    "already_applied": 0,
-    "blast_radius_blocked": 0,
-    "blast_radius_used": 127,
-    "blocked": 0,
-    "escalated": 7,
-    "failed": 0,
-    "replayed": 0,
-    "succeeded": 127,
-    "writes": 159
-  },
+  "repairs": {},
   "storage": "in-memory",
   "throughput": {
     "p50_us": 4,
-    "p99_us": 18,
+    "p99_us": 37,
     "records": 1040,
-    "wall_clock_us": 203360
+    "wall_clock_us": 34848
   },
   "transient_filtered": 1
 }

@@ -166,9 +166,26 @@ def test_unknown_arm_is_rejected_loudly():
         run_arm("magic", seed=SEED, n=10, rate=0.2)
 
 
-def test_arm_full_is_not_available_until_phase_5():
-    with pytest.raises(NotImplementedError, match="Phase 5"):
-        run_arm("full", seed=SEED, n=10, rate=0.2)
+def test_arm_full_runs_the_propose_verify_layer():
+    """Arm 3 asks a provider; everything downstream is unchanged from Phase 4."""
+    result = run_arm("full", seed=SEED, n=100, rate=0.25, hard_cases=True)
+    assert result.arm == "full"
+    assert result.llm_calls > 0
+    assert result.client_kind in ("live", "offline")
+
+
+def test_arm_full_does_not_silently_read_the_hard_case_fixtures():
+    """The fixture provider is arm 2's stand-in. If arm 3 picked it up it
+    would report zero model calls while quietly reading canned answers."""
+    full = run_arm("full", seed=SEED, n=100, rate=0.25, hard_cases=True)
+    rules = run_arm("rules", seed=SEED, n=100, rate=0.25, hard_cases=True)
+    assert full.llm_calls > 0 and rules.llm_calls == 0
+    assert rules.provider_calls > 0
+
+
+def test_arm_two_makes_no_provider_calls_at_all():
+    """The honest framing: arm 2 has no AI in it."""
+    assert run_arm("rules", seed=SEED, n=100, rate=0.25).llm_calls == 0
 
 
 # ── the ledger invariant as independent evidence ────────────────────────────
@@ -379,3 +396,52 @@ def test_amount_mismatch_is_never_auto_repaired():
     """Under-determined classes escalate rather than guess."""
     result = run_arm("rules", seed=SEED, n=200, rate=0.25, hard_cases=True, repair=True)
     assert result.repairs["escalated"] > 0
+
+
+# ── the committed cache must be complete ────────────────────────────────────
+
+def test_the_committed_cache_covers_every_eval_prompt():
+    """Zero cache misses when the eval runs with no client configured.
+
+    Without this, "fresh clone -> make setup && make verify green" silently
+    requires a network call and an API key, and that is discovered on the day
+    of the demo rather than now.
+    """
+    from statesync.classifier.llm_provider import LLMHypothesisProvider
+    from statesync.config import CACHE_DIR
+    from statesync.llm.cache import LLMCache
+
+    provider = LLMHypothesisProvider(cache=LLMCache(cache_dir=CACHE_DIR), client=None)
+    result = run_arm("full", seed=SEED, n=500, rate=0.25, hard_cases=True,
+                     provider=provider)
+
+    assert provider.network_calls == 0, "the committed cache is incomplete"
+    assert result.llm_calls > 0, "sanity: the provider should have been consulted"
+
+
+def test_the_cache_manifest_records_which_client_filled_it():
+    """A cost figure measured against the offline client is not a provider
+    cost, and the file must say which one it was."""
+    import json
+
+    from statesync.config import CACHE_DIR
+
+    manifest = json.loads((CACHE_DIR / "MANIFEST.json").read_text())
+    assert manifest["client_kind"] in ("live", "offline")
+    assert manifest["entries"] > 0
+    if manifest["client_kind"] == "offline":
+        assert "NOT a model" in manifest["note"]
+
+
+def test_arm_three_reports_cold_and_warm_separately():
+    """Warm runs read zero provider calls. That is the cache working, not a
+    generation cost of zero, and the two must not be confused."""
+    from statesync.classifier.llm_provider import LLMHypothesisProvider
+    from statesync.config import CACHE_DIR
+    from statesync.llm.cache import LLMCache
+
+    provider = LLMHypothesisProvider(cache=LLMCache(cache_dir=CACHE_DIR), client=None)
+    warm = run_arm("full", seed=SEED, n=200, rate=0.25, hard_cases=True,
+                   provider=provider)
+    assert warm.llm_calls > 0
+    assert warm.network_calls == 0

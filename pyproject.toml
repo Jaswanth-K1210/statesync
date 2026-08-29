@@ -33,6 +33,7 @@ addopts = "-q --strict-markers"
 markers = [
     "smoke: fast liveness checks, must stay under the 30s budget",
     "integration: requires real Postgres and Redis",
+    "chaos: injected failures and degradation paths",
 ]
 
 [tool.ruff]
@@ -41,6 +42,12 @@ src = ["src", "tests", "eval"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "T20"]
+
+[[tool.mypy.overrides]]
+# The Anthropic SDK is an optional dependency: the offline client is what runs
+# with no key, so a missing stub must not fail the build.
+module = "anthropic.*"
+ignore_missing_imports = true
 
 [tool.mypy]
 python_version = "3.11"

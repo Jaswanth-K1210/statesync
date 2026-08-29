@@ -130,6 +130,7 @@ def build_packet(
     provider: HypothesisProvider,
     request: HypothesisRequest,
     ledger: Ledger | None = None,
+    base_paise: int | None = None,
 ) -> EscalationPacket:
     """Run the bounded propose-verify loop and package the outcome.
 
@@ -163,7 +164,8 @@ def build_packet(
                 break
             hypotheses.append(
                 verify(proposal, residual_paise=residual_paise,
-                       artifacts=request.artifacts, label=f"H{len(hypotheses) + 1}")
+                       artifacts=request.artifacts, label=f"H{len(hypotheses) + 1}",
+                       base_paise=base_paise)
             )
             accepted += 1
 

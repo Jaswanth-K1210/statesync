@@ -336,8 +336,9 @@ def test_the_eval_reports_provider_calls():
     from eval.arms import run_arm
 
     result = run_arm("rules", seed=SEED, n=60, rate=0.25, hard_cases=True)
-    assert result.llm_calls > 0
-    assert result.llm_calls <= 2 * result.reason_codes_total
+    assert result.provider_calls > 0
+    assert result.provider_calls <= 2 * result.reason_codes_total
+    assert result.llm_calls == 0, "arm 2 consults fixtures, not a model"
 
 
 def test_payment_ids_covers_auxiliary_payments_not_just_numbered_cases(injected):
@@ -347,3 +348,13 @@ def test_payment_ids_covers_auxiliary_payments_not_just_numbered_cases(injected)
     assert "pay_hc16" in injected.payment_ids
     assert "pay_hc17" in injected.payment_ids
     assert injected.payment_ids >= {p for c in injected.cases for p in c.payment_ids}
+
+
+def test_the_packet_and_the_eval_apply_the_same_checks(injected):
+    """Building a packet two ways with two different checks is how a value
+    comes out right in one place and wrong in another."""
+    from eval.arms import run_arm
+
+    packet = injected.packet_for("case_13")
+    result = run_arm("rules", seed=SEED, n=60, rate=0.25, hard_cases=True)
+    assert packet.reason_code.value in result.reason_codes

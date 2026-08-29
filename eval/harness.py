@@ -16,6 +16,7 @@ import json
 from pathlib import Path
 
 from eval.arms import ArmResult, make_repair_runner, run_arm
+from statesync.classifier.settlement import settlement_gap_report
 from statesync.config import PROJECT_ROOT, SEED
 
 __all__ = ["main", "render", "render_idempotency"]
@@ -54,6 +55,24 @@ def render(results: list[ArmResult], include_timing: bool = True) -> str:
         w(f"  {r.arm:<8}{_pct(r.match_rate):>8}{r.detected:>8}{r.missed:>6}"
           f"{r.false_positives:>8}{r.records:>9}{r.inspections:>7}{timing}{r.llm_calls:>5}")
     w("")
+    full = next((r for r in results if r.arm == "full"), None)
+    if full is not None:
+        w("  Provider cost — cold vs warm")
+        w("  " + "-" * 74)
+        w(f"  {'provider calls (this run)':<44}{full.llm_calls:>14,}")
+        w(f"  {'of which reached the network':<44}{full.network_calls:>14,}")
+        w(f"  {'client':<44}{full.client_kind:>14}")
+        w("")
+        w("  Every response is cached and committed, so a warm run reaches the network")
+        w("  zero times. That is the cache working, NOT a generation cost of zero — the")
+        w("  cold figure in llm_cache/MANIFEST.json is the one a README may quote, and")
+        w("  determinism here rests on the cache rather than on the model.")
+        if full.client_kind == "offline":
+            w("")
+            w("  This cache was filled by the offline heuristic client, which is not a")
+            w("  model. Cold provider cost is UNMEASURED until an API key is configured.")
+        w("")
+
     w("  Two-run confirmation inspects every record twice; this is the measured cost")
     w(f"  of not repairing in-flight payments. Measured {results[0].storage} — rec/s is")
     w("  the reconciler's rate and does not include database I/O.")
@@ -115,6 +134,17 @@ def render(results: list[ArmResult], include_timing: bool = True) -> str:
             w(f"  {'blocked by blast radius':<44}{rep.get('blocked', 0):>14,}")
             w(f"  {'rows written':<44}{rep.get('writes', 0):>14,}")
             w("")
+        settlement = settlement_gap_report()
+        w("  SETTLEMENT_GAP")
+        w("  " + "-" * 74)
+        w(f"  {'status':<44}{settlement['status']:>14}")
+        w(f"  {'accuracy':<44}{settlement['accuracy']:>14}")
+        w("")
+        w("  In the taxonomy, not detected. The sandbox produces no genuine settlement")
+        w("  behaviour, so any payout data would be manufactured — and an accuracy")
+        w("  figure computed against manufactured data is not a measurement. Never")
+        w("  merged into a headline number.")
+        w("")
         w("  Reading the match rate")
         w("  " + "-" * 74)
         w("  Four of these classes are exact set operations. 100% is the expected floor,")
@@ -161,7 +191,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--results-dir", type=Path, default=RESULTS_DIR)
     args = parser.parse_args(argv)
 
-    arms = [args.arm] if args.arm else ["none", "rules"]
+    arms = [args.arm] if args.arm else ["none", "rules", "full"]
     args.results_dir.mkdir(parents=True, exist_ok=True)
 
     results = [

@@ -1,0 +1,9 @@
+{
+  "populated_at": "2026-08-29T15:36:33Z",
+  "client_kind": "offline",
+  "seed": 20260905,
+  "records": 500,
+  "entries": 12,
+  "provider_calls_cold": 12,
+  "note": "Populated by the offline heuristic client, which is NOT a model. Cold provider cost is unmeasured until an API key is configured."
+}

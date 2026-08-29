@@ -384,13 +384,17 @@ def _build_packets(
     # LLM provider behind the same interface and nothing else changes.
     case_13 = FixtureHypothesisProvider({
         "pay_hc13": [
+            # Two genuinely different explanations of the same 1140 paise.
+            # Neither declares a rate: these are components of a *residual*,
+            # not percentages of the full payment, so a declared rate would be
+            # checked against the wrong base and rejected — correctly.
             Proposal(components=[
-                Component(name="mdr", amount_paise=800, cites="pay_hc13", rate_bps=200),
-                Component(name="gst", amount_paise=340, cites="pay_hc13", rate_bps=1800),
+                Component(name="instant_settlement", amount_paise=966, cites="stl_hard"),
+                Component(name="gst", amount_paise=174, cites="stl_hard"),
             ]),
             Proposal(components=[
                 Component(name="refund", amount_paise=1000, cites="rfnd_hard"),
-                Component(name="mdr", amount_paise=140, cites="pay_hc13", rate_bps=200),
+                Component(name="rounding", amount_paise=140, cites="pay_hc13"),
             ]),
         ],
     })
@@ -436,12 +440,17 @@ def _build_packets(
             provider=FixtureHypothesisProvider(combined.fixtures),
             request=HypothesisRequest(residual_paise=residual, instrument="card_domestic",
                                       artifacts=b.artifacts, case_id="pay_hc13"),
+            # The same base the eval passes. Building the packet two ways with
+            # two different checks is how a value comes out right in one place
+            # and wrong in another.
+            base_paise=400_000,
         ),
         "case_14": build_packet(
             divergence=divergence_14, known_components=known, residual_paise=residual,
             provider=FixtureHypothesisProvider(combined.fixtures),
             request=HypothesisRequest(residual_paise=residual, instrument="card_domestic",
                                       artifacts=b.artifacts, case_id="pay_hc14"),
+            base_paise=400_000,
         ),
     }
     return packets, combined

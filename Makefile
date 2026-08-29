@@ -10,7 +10,7 @@ COMPOSE := docker compose
 
 .DEFAULT_GOAL := help
 .PHONY: help setup up down test test-unit test-prop test-int test-chaos test-e2e \
-        smoke smoke-frontend verify determinism eval eval-arm demo lint clean
+        smoke smoke-frontend verify determinism eval eval-arm demo lint clean warm-cache
 
 help:  ## show this help
 	@grep -hE '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) | sort | \
@@ -31,7 +31,7 @@ up:  ## start Postgres and Redis (skipped when STATESYNC_NO_COMPOSE=1)
 down:  ## stop Postgres and Redis
 	$(COMPOSE) down
 
-test: test-unit test-prop test-int  ## every test layer built so far
+test: test-unit test-prop test-int test-chaos  ## every test layer built so far
 
 test-unit:  ## one function, no I/O (<5s)
 	$(PYTEST) tests/unit -q
@@ -42,8 +42,8 @@ test-prop:  ## invariants under generated input (hypothesis)
 test-int:  ## real Postgres + Redis, full pipeline (<2min)
 	$(PYTEST) tests/integration -q
 
-test-chaos:  ## injected failures and degradation paths (Phase 5)
-	@echo "test-chaos: no chaos tests until Phase 5 (LLM degradation)."
+test-chaos:  ## injected failures and degradation paths
+	$(PYTEST) tests/chaos -q
 
 test-e2e:  ## Playwright ops-person journeys (Phase 6)
 	@echo "test-e2e: no frontend until Phase 6."
@@ -60,7 +60,7 @@ determinism:  ## the same seed must produce byte-identical output
 		test "$$a" = "$$b" && echo "determinism: OK  $$a" \
 		|| (echo "determinism: BROKEN  $$a != $$b" && exit 1)
 
-verify: lint test-unit test-prop test-int smoke determinism  ## green before any commit to main
+verify: lint test-unit test-prop test-int test-chaos smoke determinism  ## green before any commit to main
 	@echo "verify: green"
 
 lint:  ## ruff + mypy --strict
@@ -69,6 +69,9 @@ lint:  ## ruff + mypy --strict
 
 eval:  ## the 3-arm measurement run, regenerates README numbers
 	$(PY) -m eval.harness --seed $(SEED) --n 500
+
+warm-cache:  ## populate and commit the LLM cache (records which client filled it)
+	$(PY) -m eval.warm_cache
 
 eval-arm:  ## a single arm, e.g. make eval-arm ARM=rules
 	$(PY) -m eval.harness --seed $(SEED) --n 500 --arm $(ARM)

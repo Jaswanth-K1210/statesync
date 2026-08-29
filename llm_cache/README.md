@@ -3,9 +3,11 @@
 Every LLM response, keyed by `sha256(prompt)[:16]`, committed to the repo.
 
 This directory is why the demo cannot fail because of a rate limit, a network
-blip, or a provider outage: smoke rung S5 runs the LLM path with the network
-disabled and asserts it resolves entirely from here.
+blip, or a provider outage: smoke rung S5 runs the propose-verify path with no
+client configured at all and asserts it resolves entirely from here.
 
-Empty until Phase 5. The harness that fills it (`src/statesync/llm/cache.py`)
-was built in Phase 1 deliberately — a cache retrofitted after the fact records
-whatever the network happened to return on the last run.
+`MANIFEST.json` records which client populated the cache. **Read it before
+quoting any cost or throughput figure** — a cache filled by the offline
+heuristic client tells you nothing about a real provider's generation cost.
+
+Repopulate with `make warm-cache`.

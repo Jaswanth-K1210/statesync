@@ -1,7 +1,9 @@
 {
   "arm": "none",
   "chain_ok": true,
+  "client_kind": "",
   "confirmed": 0,
+  "degraded": false,
   "detected": 0,
   "exceptions_count": 0,
   "false_positives": 0,
@@ -16,6 +18,7 @@
   "ledger_entries": 0,
   "llm_calls": 0,
   "misclassified": 0,
+  "network_calls": 0,
   "per_class": {
     "captured_no_order": {
       "detected": 0,
@@ -38,6 +41,7 @@
       "rate_bps": 0
     }
   },
+  "provider_calls": 0,
   "reason_codes": {},
   "records": 500,
   "repairs": {},
@@ -46,7 +50,7 @@
     "p50_us": 0,
     "p99_us": 0,
     "records": 1040,
-    "wall_clock_us": 8559
+    "wall_clock_us": 6676
   },
   "transient_filtered": 0
 }

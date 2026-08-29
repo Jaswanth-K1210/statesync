@@ -287,3 +287,82 @@ def test_s4_the_exception_list_has_reason_codes():
         assert result.exceptions_count > 0
         assert path.read_text().splitlines()[1] == ",".join(EXCEPTION_COLUMNS)
         assert "no_hypothesis_verified" in path.read_text()
+
+
+# ── S5 · AI layer and degradation ───────────────────────────────────────────
+# The rung that saves the demo: prove the network is not on the critical path
+# every single run, rather than hoping on the day.
+
+def test_s5_the_propose_verify_path_resolves_entirely_from_the_committed_cache():
+    """No client configured at all. A cache gap raises rather than degrading."""
+    from eval.arms import run_arm
+
+    from statesync.classifier.llm_provider import LLMHypothesisProvider
+    from statesync.config import CACHE_DIR
+    from statesync.llm.cache import LLMCache
+
+    provider = LLMHypothesisProvider(cache=LLMCache(cache_dir=CACHE_DIR), client=None)
+    result = run_arm("full", seed=SEED, n=50, rate=0.25, hard_cases=True,
+                     provider=provider)
+
+    assert provider.network_calls == 0, "the demo would need a network call"
+    assert result.llm_calls > 0
+
+
+def test_s5_a_malformed_response_degrades_rather_than_crashing():
+    import tempfile
+    from pathlib import Path as _Path
+
+    from statesync.classifier.llm_provider import LLMHypothesisProvider
+    from statesync.llm.cache import LLMCache
+
+    with tempfile.TemporaryDirectory() as tmp:
+        provider = LLMHypothesisProvider(
+            cache=LLMCache(cache_dir=_Path(tmp)), client=lambda _: "{'broken': ",
+        )
+        from statesync.classifier.provider import HypothesisRequest
+        from statesync.classifier.verifier import ArtifactIndex
+
+        proposals = provider.propose(HypothesisRequest(
+            residual_paise=1140, instrument="upi",
+            artifacts=ArtifactIndex({"pay_1"}), case_id="pay_1",
+        ))
+        assert proposals == []
+
+
+def test_s5_generation_is_bounded_to_two_calls_per_divergence():
+    import tempfile
+    from pathlib import Path as _Path
+
+    from statesync.classifier.escalation import build_packet
+    from statesync.classifier.llm_provider import LLMHypothesisProvider
+    from statesync.classifier.provider import HypothesisRequest
+    from statesync.classifier.verifier import ArtifactIndex
+    from statesync.llm.cache import LLMCache
+    from statesync.models.domain import Divergence
+    from statesync.models.enums import DivergenceClass
+
+    now = datetime(2026, 9, 5, tzinfo=UTC)
+    with tempfile.TemporaryDirectory() as tmp:
+        provider = LLMHypothesisProvider(
+            cache=LLMCache(cache_dir=_Path(tmp)), client=lambda _: "",
+        )
+        build_packet(
+            divergence=Divergence(klass=DivergenceClass.AMOUNT_MISMATCH,
+                                  payment_id="pay_1", order_id=None,
+                                  amount_paise=400_000, observed_at=now),
+            known_components=[], residual_paise=1140, provider=provider,
+            request=HypothesisRequest(residual_paise=1140, instrument="upi",
+                                      artifacts=ArtifactIndex({"pay_1"}),
+                                      case_id="pay_1"),
+        )
+        assert provider.calls <= 2
+
+
+def test_s5_the_cache_manifest_says_which_client_filled_it():
+    import json
+
+    from statesync.config import CACHE_DIR
+
+    manifest = json.loads((CACHE_DIR / "MANIFEST.json").read_text())
+    assert manifest["client_kind"] in ("live", "offline")

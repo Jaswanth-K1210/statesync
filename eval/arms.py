@@ -21,6 +21,7 @@ import redis as redis_lib
 
 from statesync.classifier.deterministic import classify
 from statesync.classifier.escalation import build_packet
+from statesync.classifier.llm_provider import LLMHypothesisProvider
 from statesync.classifier.provider import HypothesisProvider, HypothesisRequest
 from statesync.classifier.verifier import ArtifactIndex, Component
 from statesync.config import BASE_TIME, REDIS_URL, SEED, STALENESS_WINDOW
@@ -30,6 +31,8 @@ from statesync.generator.synthetic import Batch, generate_batch
 from statesync.injector.clean import InjectedBatch, inject_clean
 from statesync.injector.hard_cases import inject_hard_cases
 from statesync.ledger.chain import Ledger
+from statesync.llm.cache import LLMCache
+from statesync.llm.client import ClientKind, resolve_client
 from statesync.metrics.throughput import Stopwatch, ThroughputReport
 from statesync.models.domain import Divergence
 from statesync.models.enums import DivergenceClass, ReasonCode
@@ -73,6 +76,10 @@ class ArmResult:
     fee_coverage_bps: int = 0
     fee_priced: int = 0
     fee_unpriced: int = 0
+    network_calls: int = 0
+    provider_calls: int = 0
+    client_kind: str = ""
+    degraded: bool = False
     storage: str = "in-memory"
     """What the throughput figure was measured against.
 
@@ -142,6 +149,10 @@ class ArmResult:
             "fee_coverage_bps": self.fee_coverage_bps,
             "fee_priced": self.fee_priced,
             "fee_unpriced": self.fee_unpriced,
+            "network_calls": self.network_calls,
+            "provider_calls": self.provider_calls,
+            "client_kind": self.client_kind,
+            "degraded": self.degraded,
             "inspections": self.inspections,
             "invariant_delta_paise": self.invariant_delta_paise,
             "per_class": {k.value: v for k, v in sorted(self.per_class.items())},
@@ -159,21 +170,18 @@ def run_arm(
     blast_radius: int = 200,
     runner: RepairRunner | None = None,
     hard_cases: bool = False,
+    provider: HypothesisProvider | None = None,
 ) -> ArmResult:
     """Run one arm over a freshly generated, freshly injected batch."""
     if arm not in ARMS:
         raise ValueError(f"unknown arm {arm!r}; expected one of {ARMS}")
-    if arm == "full":
-        raise NotImplementedError(
-            "arm 'full' needs the propose-verify layer, which lands in Phase 5"
-        )
 
     injected = inject_clean(generate_batch(seed=seed, n=n), seed=seed, rate=rate)
     hard_case_count = 0
     hard_payment_ids: set[str] = set()
     late_arrivals: list[Any] = []
-    provider: HypothesisProvider | None = None
     artifacts: ArtifactIndex | None = None
+    client_kind: str = ClientKind.OFFLINE
     if hard_cases:
         # Hard-case timestamps are relative to the reconciliation clock, so
         # case 12's in-flight payment actually lands inside the staleness
@@ -184,8 +192,21 @@ def run_arm(
         hard_case_count = len(hard.cases)
         hard_payment_ids = hard.payment_ids
         late_arrivals = list(hard.late_arrivals)
-        provider = hard.provider
+        # Arm 3 asks a model; the fixture provider is arm 2's deterministic
+        # stand-in. Letting the hard-case fixtures win here would have arm 3
+        # silently reading canned answers and reporting zero model calls.
+        if provider is None and arm != "full":
+            provider = hard.provider
         artifacts = hard.artifacts
+
+    if arm == "full" and provider is None:
+        # Arm 3 asks a provider instead of reading fixtures. Everything else —
+        # the verifier, the packet, the bounds — is unchanged from Phase 4.
+        client, client_kind = resolve_client()
+        provider = LLMHypothesisProvider(cache=LLMCache(), client=client)
+    if arm == "full":
+        if artifacts is None:
+            artifacts = ArtifactIndex({p.payment_id for p in injected.batch.payments})
     # A caller may pass an existing runner to re-run the same batch against
     # state that already has the repairs in it — that is how the "running it
     # twice writes nothing" claim is exercised end to end.
@@ -327,7 +348,17 @@ def run_arm(
         confirmed=confirmed_total,
         transient_filtered=tracker.transient_filtered,
         exceptions_count=count,
-        llm_calls=getattr(provider, "calls", 0),
+        # Only a real LLM provider counts as an LLM call. Arm 2 consults a
+        # fixture provider, and reporting that as an LLM call would undercut
+        # the honest framing that arm 2 contains no AI at all.
+        llm_calls=(
+            getattr(provider, "calls", 0)
+            if isinstance(provider, LLMHypothesisProvider) else 0
+        ),
+        provider_calls=getattr(provider, "calls", 0),
+        network_calls=getattr(provider, "network_calls", 0),
+        client_kind=client_kind if arm == "full" else "",
+        degraded=bool(getattr(provider, "degraded", False)),
         ledger_entries=len(ledger.entries),
         chain_ok=ledger.verify()[0],
         invariant_ok=invariant.ok,
@@ -398,5 +429,6 @@ def _escalation_reason(
             case_id=divergence.payment_id or "",
         ),
         ledger=ledger,
+        base_paise=divergence.amount_paise,
     )
     return packet.reason_code
