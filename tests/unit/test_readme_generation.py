@@ -17,6 +17,15 @@ import pytest
 from eval.readme import TEMPLATE, render_readme
 
 
+def _blank_throughput(text: str) -> str:
+    """Blank only the throughput column.
+
+    Wall-clock figures cannot be byte-identical between runs, but the LLM call
+    count beside them is a real measurement and must still be compared.
+    """
+    return re.sub(r"\| [\d,]+ (\| \d+ \|)$", r"| ~ \1", text, flags=re.M)
+
+
 @pytest.fixture(scope="module")
 def rendered():
     return render_readme()
@@ -119,9 +128,8 @@ def test_a_stale_readme_is_detectable():
         # can never be byte-identical between runs.
         # Blank only the throughput column; the LLM count beside it is a real
         # measurement and must still be compared.
-        norm = lambda t: re.sub(r"\| [\d,]+ (\| \d+ \|)$", r"| ~ \1", t, flags=re.M)
-        current = norm(readme.read_text())
-        expected = norm(render_readme(include_timing=False))
+        current = _blank_throughput(readme.read_text())
+        expected = _blank_throughput(render_readme(include_timing=False))
         assert current == expected, "README.md is stale; run make readme"
 
 
