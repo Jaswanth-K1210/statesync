@@ -115,4 +115,14 @@ def test_a_stale_readme_is_detectable():
 
     readme = Path(PROJECT_ROOT) / "README.md"
     if readme.exists():
-        assert readme.read_text() == render_readme(), "README.md is stale; run make readme"
+        # Compare the deterministic form: throughput is wall-clock derived and
+        # can never be byte-identical between runs.
+        current = re.sub(r"\| [\d,]+ \| \d+ \|$", "| ~ | 0 |", readme.read_text(), flags=re.M)
+        expected = re.sub(r"\| [\d,]+ \| \d+ \|$", "| ~ | 0 |",
+                          render_readme(include_timing=False), flags=re.M)
+        assert current == expected, "README.md is stale; run make readme"
+
+
+def test_the_deterministic_render_is_reproducible():
+    """What the fresh-clone check compares."""
+    assert render_readme(include_timing=False) == render_readme(include_timing=False)

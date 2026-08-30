@@ -52,11 +52,21 @@ make verify
 echo "==> make eval (must reproduce the committed numbers)"
 make eval > /tmp/sstest-eval.txt
 echo "==> checking the README still matches regeneration"
-.venv/bin/python -m eval.readme
-if ! git diff --quiet README.md; then
-  echo "FAIL: README.md drifted from regeneration" >&2
-  exit 1
-fi
+# Compares the deterministic form. Throughput is wall-clock derived, so a
+# byte-identical README between machines is not achievable and demanding one
+# would make this check fail for the one reason that carries no information.
+.venv/bin/python - <<'PY'
+import re, sys
+sys.path.insert(0, ".")
+from pathlib import Path
+from eval.readme import render_readme
+
+norm = lambda t: re.sub(r"\| [\d,]+ \| \d+ \|$", "| ~ | 0 |", t, flags=re.M)
+if norm(Path("README.md").read_text()) != norm(render_readme(include_timing=False)):
+    print("FAIL: README.md drifted from regeneration", file=sys.stderr)
+    raise SystemExit(1)
+print("   README matches regeneration (timing excluded)")
+PY
 
 echo
 echo "reproduced cleanly in $DEST with no API key"

@@ -230,7 +230,15 @@ def _pct(value: float) -> str:
     return f"{value * 100:.1f}%"
 
 
-def render_readme() -> str:
+def render_readme(include_timing: bool = True) -> str:
+    """Render the README.
+
+    `include_timing=False` replaces wall-clock-derived figures with a marker.
+    Throughput is the first word of the published bar so it belongs in the
+    file, but it cannot be byte-reproducible — the staleness check and the
+    reproducibility clone therefore compare the deterministic form. This is
+    the same carve-out the eval report makes, for the same reason.
+    """
     results = load_results()
     manifest = load_manifest()
     cold = manifest.get("cold", {}) or {}
@@ -244,6 +252,8 @@ def render_readme() -> str:
         return _pct((arm.get("detected", 0) - arm.get("misclassified", 0)) / injected)
 
     def rps(arm: dict[str, Any]) -> str:
+        if not include_timing:
+            return "~"
         tp = arm.get("throughput", {})
         micros = tp.get("wall_clock_us", 0) or 1
         return f"{arm.get('records', 0) * 1_000_000 / micros:,.0f}"
