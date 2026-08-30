@@ -56,9 +56,9 @@
   "storage": "in-memory",
   "throughput": {
     "p50_us": 3,
-    "p99_us": 13,
+    "p99_us": 27,
     "records": 1040,
-    "wall_clock_us": 25593
+    "wall_clock_us": 30123
   },
   "transient_filtered": 1,
   "verdicts": {

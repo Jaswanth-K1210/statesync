@@ -146,3 +146,24 @@ def test_the_test_count_is_measured_not_zero(rendered):
     match = _re.search(r"lint, types, ([\d,]+) tests", rendered)
     assert match, "the test count line is missing"
     assert int(match.group(1).replace(",", "")) > 100
+
+
+def test_the_seam_bug_count_is_derived_not_typed(rendered):
+    """Writing the count in prose would be the eighth instance of the very
+    pattern the section describes."""
+    from eval.readme import TEMPLATE, load_seam_bugs
+
+    instances = load_seam_bugs()["instances"]
+    assert f"What went wrong, {len(instances)} times" in rendered
+    assert "{seam_count}" in TEMPLATE, "the count must be templated"
+
+
+def test_every_seam_bug_appears_in_the_readme(rendered):
+    from eval.readme import load_seam_bugs
+
+    for instance in load_seam_bugs()["instances"]:
+        assert instance["where"] in rendered
+
+
+def test_the_seam_section_names_what_catches_them(rendered):
+    assert "test_reporting_consistency" in rendered

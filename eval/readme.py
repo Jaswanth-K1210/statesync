@@ -26,6 +26,7 @@ from statesync.config import CACHE_DIR, PROJECT_ROOT, SEED
 __all__ = ["TEMPLATE", "load_manifest", "load_results", "main", "render_readme"]
 
 RESULTS_DIR = PROJECT_ROOT / "eval" / "results"
+SEAM_BUGS_PATH = PROJECT_ROOT / "docs" / "seam_bugs.json"
 README_PATH = PROJECT_ROOT / "README.md"
 
 
@@ -36,6 +37,17 @@ def load_results() -> dict[str, dict[str, Any]]:
         if path.exists():
             out[arm] = json.loads(path.read_text())
     return out
+
+
+def load_seam_bugs() -> dict[str, Any]:
+    """The canonical list of same-shape bugs.
+
+    Read rather than restated. Writing the count into prose would be another
+    instance of exactly the pattern the list describes.
+    """
+    return json.loads(SEAM_BUGS_PATH.read_text()) if SEAM_BUGS_PATH.exists() else {
+        "instances": [], "shape": ""
+    }
 
 
 def load_manifest() -> dict[str, Any]:
@@ -238,6 +250,25 @@ settlement engine: it detects gaps and escalates. **Not fully autonomous** —
 anything outside the confidence, value or blast-radius bounds goes to a human
 by design rather than by limitation.
 
+## What went wrong, {seam_count} times
+
+{seam_shape}
+
+| where | what happened |
+|---|---|
+{seam_rows}
+
+Every one of these passed its own component tests. The chain verified, the
+packet was built, the provider was constructed, the latency was timed — each
+piece did its job and the failure lived in the seam between two correct
+pieces. Integration tests that assert agreement *across* outputs, rather than
+correctness within one, are what caught them:
+`tests/integration/test_reporting_consistency.py`.
+
+The last one is the sharpest. `Ledger.verify()` was correct and thoroughly
+tested, and nothing called it — so the audit chain could break and repairs
+would carry on. The guarantee existed as prose for six phases.
+
 ## Architecture
 
 See `ARCHITECTURE.md` for the decision log: the lease that must not expire in
@@ -262,6 +293,7 @@ def render_readme(include_timing: bool = True) -> str:
     """
     results = load_results()
     manifest = load_manifest()
+    seams = load_seam_bugs()
     cold = manifest.get("cold", {}) or {}
 
     none = results.get("none", {})
@@ -345,6 +377,11 @@ def render_readme(include_timing: bool = True) -> str:
         backoff_ms=cold.get("backoff_ms", 0),
         chain_overhead_ms=cold.get("chain_overhead_ms", 0),
         settlement_status=settlement_gap_report()["status"],
+        seam_count=len(seams["instances"]),
+        seam_shape=seams["shape"],
+        seam_rows="\n".join(
+            f"| {i['where']} | {i['what']} |" for i in seams["instances"]
+        ),
     )
 
 

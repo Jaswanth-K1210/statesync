@@ -67,7 +67,7 @@
     "p50_us": 2,
     "p99_us": 12,
     "records": 1040,
-    "wall_clock_us": 146095
+    "wall_clock_us": 140041
   },
   "transient_filtered": 1,
   "verdicts": {

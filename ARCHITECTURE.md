@@ -197,3 +197,32 @@ Two consequences, both load-bearing:
 Before pooling, hc13's designed outcome had **no coverage at all** in the arm
 being shipped, because the fixtures that create the ambiguity were displaced.
 `test_case_13_stays_ambiguous_in_the_model_arm` closes that.
+
+
+## 12. Seven bugs, one shape
+
+Entry 10 described this pattern with two examples. By the end of the build it
+had recurred five more times, and the canonical list lives in
+`docs/seam_bugs.json` — pointed at rather than restated here, because writing
+the count in two places is the pattern itself.
+
+**The shape:** a value computed correctly in one place, then re-derived,
+misrouted, or ignored somewhere else.
+
+**What makes it hard to see:** every component test passed, every time. The
+packet was built correctly. The chain verified correctly. The provider was
+constructed correctly. The latency was timed correctly. Each piece did its job,
+and the failure lived in the seam between two correct pieces — which is exactly
+where unit tests do not look.
+
+**What catches it:** tests that assert agreement *across* outputs rather than
+correctness within one. `tests/integration/test_reporting_consistency.py` is
+that suite: the CSV's reason codes against the reported tallies, the row count
+against the summary line, detected against the per-class sum, the rendered
+report against the result it was built from.
+
+The last instance is the one to remember. `Ledger.verify()` was correct,
+thoroughly tested, and called by nothing — so a tampered chain would have been
+detected and then ignored while repairs kept writing. The most important
+guarantee in the design existed as prose for six phases, and no component test
+could have told us, because no component was wrong.

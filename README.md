@@ -15,7 +15,7 @@ escalate, report.** One loop. Six kinds of disagreement.
 ## Reproduce every number below
 
 ```
-make setup && make verify     # lint, types, 596 tests
+make setup && make verify     # lint, types, 599 tests
 make eval                     # regenerates every figure in this file
 make readme                   # regenerates this file from that output
 ```
@@ -31,9 +31,9 @@ Seed `20260905` · 500 synthetic records · 124 injected divergences ·
 
 | arm | match rate | detected | missed | false positives | rec/s | LLM calls |
 |---|---|---|---|---|---|---|
-| 1 · no detection | 0.0% | 0 | 124 | 0 | 188,822 | 0 |
-| 2 · rules only | 100.0% | 124 | 0 | 0 | 3,422 | 0 |
-| 3 · rules + model | 100.0% | 124 | 0 | 0 | 19,537 | 10 |
+| 1 · no detection | 0.0% | 0 | 124 | 0 | 171,292 | 0 |
+| 2 · rules only | 100.0% | 124 | 0 | 0 | 3,570 | 0 |
+| 3 · rules + model | 100.0% | 124 | 0 | 0 | 16,599 | 10 |
 
 **100.0% is the expected floor, not an achievement.** Four of the six
 divergence classes are exact set operations; if a set difference failed to find
@@ -156,6 +156,31 @@ Not a replacement for webhooks: it is the safety net underneath them. Not a
 settlement engine: it detects gaps and escalates. **Not fully autonomous** —
 anything outside the confidence, value or blast-radius bounds goes to a human
 by design rather than by limitation.
+
+## What went wrong, 7 times
+
+A value computed correctly in one place, then re-derived, misrouted, or ignored somewhere else. Every component test passed. The failure was always between correct components.
+
+| where | what happened |
+|---|---|
+| escalation packet -> exceptions.csv | The packet was built and was correct; the CSV re-derived the reason code from a classifier default, so case 13 shipped mislabelled. |
+| hard-case packets vs the eval | base_paise was passed on one path and omitted on the other, so the same packet was checked two different ways depending on who built it. |
+| arm 3's provider | The model provider was constructed, then the hard-case fixture provider was consumed instead — arm 3 read canned answers and reported zero model calls. |
+| warm_cache | One client was probed for the manifest while a different one served the run, so the recorded chain was never the chain that answered. |
+| provider latency | Retry backoff was measured inside the timed call, so sleep was reported as generation cost — a measurement taken at the wrong boundary. |
+| rejection-rate prose | A sentence said 'two times in three' beside a computed 75%. The figure was restated by hand and drifted. |
+| Ledger.verify() | Correct, thoroughly tested, and called by nothing. A tampered chain would have been detected and then ignored while repairs kept writing. |
+
+Every one of these passed its own component tests. The chain verified, the
+packet was built, the provider was constructed, the latency was timed — each
+piece did its job and the failure lived in the seam between two correct
+pieces. Integration tests that assert agreement *across* outputs, rather than
+correctness within one, are what caught them:
+`tests/integration/test_reporting_consistency.py`.
+
+The last one is the sharpest. `Ledger.verify()` was correct and thoroughly
+tested, and nothing called it — so the audit chain could break and repairs
+would carry on. The guarantee existed as prose for six phases.
 
 ## Architecture
 

@@ -1,0 +1,34 @@
+{
+  "note": "The canonical list. README count and table are derived from this file; ARCHITECTURE.md points here rather than restating a total. Writing the count in prose would be another instance of the very pattern.",
+  "shape": "A value computed correctly in one place, then re-derived, misrouted, or ignored somewhere else. Every component test passed. The failure was always between correct components.",
+  "instances": [
+    {
+      "where": "escalation packet -> exceptions.csv",
+      "what": "The packet was built and was correct; the CSV re-derived the reason code from a classifier default, so case 13 shipped mislabelled."
+    },
+    {
+      "where": "hard-case packets vs the eval",
+      "what": "base_paise was passed on one path and omitted on the other, so the same packet was checked two different ways depending on who built it."
+    },
+    {
+      "where": "arm 3's provider",
+      "what": "The model provider was constructed, then the hard-case fixture provider was consumed instead — arm 3 read canned answers and reported zero model calls."
+    },
+    {
+      "where": "warm_cache",
+      "what": "One client was probed for the manifest while a different one served the run, so the recorded chain was never the chain that answered."
+    },
+    {
+      "where": "provider latency",
+      "what": "Retry backoff was measured inside the timed call, so sleep was reported as generation cost — a measurement taken at the wrong boundary."
+    },
+    {
+      "where": "rejection-rate prose",
+      "what": "A sentence said 'two times in three' beside a computed 75%. The figure was restated by hand and drifted."
+    },
+    {
+      "where": "Ledger.verify()",
+      "what": "Correct, thoroughly tested, and called by nothing. A tampered chain would have been detected and then ignored while repairs kept writing."
+    }
+  ]
+}
