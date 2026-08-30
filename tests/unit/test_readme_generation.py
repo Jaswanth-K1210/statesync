@@ -117,9 +117,11 @@ def test_a_stale_readme_is_detectable():
     if readme.exists():
         # Compare the deterministic form: throughput is wall-clock derived and
         # can never be byte-identical between runs.
-        current = re.sub(r"\| [\d,]+ \| \d+ \|$", "| ~ | 0 |", readme.read_text(), flags=re.M)
-        expected = re.sub(r"\| [\d,]+ \| \d+ \|$", "| ~ | 0 |",
-                          render_readme(include_timing=False), flags=re.M)
+        # Blank only the throughput column; the LLM count beside it is a real
+        # measurement and must still be compared.
+        norm = lambda t: re.sub(r"\| [\d,]+ (\| \d+ \|)$", r"| ~ \1", t, flags=re.M)
+        current = norm(readme.read_text())
+        expected = norm(render_readme(include_timing=False))
         assert current == expected, "README.md is stale; run make readme"
 
 

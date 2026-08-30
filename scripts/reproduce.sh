@@ -61,7 +61,7 @@ sys.path.insert(0, ".")
 from pathlib import Path
 from eval.readme import render_readme
 
-norm = lambda t: re.sub(r"\| [\d,]+ \| \d+ \|$", "| ~ | 0 |", t, flags=re.M)
+norm = lambda t: re.sub(r"\| [\d,]+ (\| \d+ \|)$", r"| ~ \1", t, flags=re.M)
 if norm(Path("README.md").read_text()) != norm(render_readme(include_timing=False)):
     print("FAIL: README.md drifted from regeneration", file=sys.stderr)
     raise SystemExit(1)
