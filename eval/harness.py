@@ -83,32 +83,48 @@ def render(results: list[ArmResult], include_timing: bool = True) -> str:
     if full is not None and rules_arm is not None:
         w("  Does the propose-verify layer earn its place?")
         w("  " + "-" * 74)
-        w(f"  {'':<24}{'verified':>10}{'ambiguous':>11}{'no-hyp':>9}{'fee-unk':>9}{'hyps':>7}")
+        w("  Cases: how each escalated AMOUNT_MISMATCH was finally resolved.")
+        w(f"  {'arm':<24}{'verified':>9}{'ambiguous':>10}{'no-hyp':>8}"
+          f"{'fee-unk':>8}{'cases':>7}")
         for arm_result, label in ((rules_arm, "rules only"), (full, "rules + model")):
             codes = arm_result.reason_codes
-            w(f"  {label:<24}{codes.get('verified', 0):>10}"
-              f"{codes.get('ambiguous_multiple_verified', 0):>11}"
-              f"{codes.get('no_hypothesis_verified', 0):>9}"
-              f"{codes.get('fee_schedule_unknown', 0):>9}"
-              f"{arm_result.hypotheses_generated:>7}")
+            w(f"  {label:<24}{codes.get('verified', 0):>9}"
+              f"{codes.get('ambiguous_multiple_verified', 0):>10}"
+              f"{codes.get('no_hypothesis_verified', 0):>8}"
+              f"{codes.get('fee_schedule_unknown', 0):>8}"
+              f"{arm_result.reason_codes_total:>7}")
         w("")
-        w("  Verifier outcomes, by reason")
-        w("  " + "-" * 74)
+        w("  Hypotheses: individual candidates the verifier ruled on. One case may")
+        w("  produce several, and two VERIFIED on ONE case is an ambiguity, not two")
+        w("  resolutions — which is why the two tables do not add up to each other.")
+        w(f"  {'verdict':<32}{'rules only':>12}{'rules + model':>14}")
         for verdict in sorted(set(rules_arm.verdicts) | set(full.verdicts)):
-            w(f"  {verdict:<32}{rules_arm.verdicts.get(verdict, 0):>10}"
-              f"{full.verdicts.get(verdict, 0):>10}")
+            w(f"  {verdict:<32}{rules_arm.verdicts.get(verdict, 0):>12}"
+              f"{full.verdicts.get(verdict, 0):>14}")
+        w(f"  {'TOTAL':<32}{sum(rules_arm.verdicts.values()):>12}"
+          f"{sum(full.verdicts.values()):>14}")
         total = sum(full.verdicts.values())
         rejected = total - full.verdicts.get("VERIFIED", 0)
-        w(f"  {'rejection rate (arm 3)':<32}{'':>10}"
-          f"{_pct(rejected / total if total else 0):>10}")
+        w(f"  {'rejection rate':<32}{'':>12}"
+          f"{_pct(rejected / total if total else 0):>14}")
         w("")
-        w(f"  {'retry pass fired':<32}{rules_arm.pass2_fired:>10}{full.pass2_fired:>10}")
-        w(f"  {'retry resolved after pass 1 failed':<32}"
-          f"{rules_arm.pass2_resolved:>10}{full.pass2_resolved:>10}")
+        w(f"  {'retry pass fired':<32}{rules_arm.pass2_fired:>12}{full.pass2_fired:>14}")
+        w(f"  {'retry resolved after pass 1':<32}"
+          f"{rules_arm.pass2_resolved:>12}{full.pass2_resolved:>14}")
+        w("    n=1 cache build, unstable at temperature 0.7 — quote with the "
+          "sample size")
         w("")
-        w("  The rejection rate is the point. A model proposing freely and being")
-        w("  refused two times in three is evidence the guard is load-bearing —")
-        w("  a safer result than a higher accuracy number would be.")
+        # Derived, not written down: a prose figure that has to be kept in
+        # step with a computed one drifts the moment either changes.
+        w("  The rejection rate is the point. The model proposed freely and was")
+        w(f"  refused {rejected} of {total} times; that is evidence the guard is")
+        w("  load-bearing, which is a safer result than a higher accuracy number.")
+        w("")
+        w("  LIMIT: the verifier is sound but not complete. It detects ambiguity")
+        w("  only among hypotheses that were generated, so a proposer that misses")
+        w("  a second valid explanation can turn a correctly-ambiguous case into")
+        w("  false confidence. Candidate sets are therefore pooled, never")
+        w("  replaced: the model can add a resolution, never remove an ambiguity.")
         w("")
 
     rules = next((r for r in results if r.arm == "rules"), None)

@@ -358,3 +358,67 @@ def test_the_packet_and_the_eval_apply_the_same_checks(injected):
     packet = injected.packet_for("case_13")
     result = run_arm("rules", seed=SEED, n=60, rate=0.25, hard_cases=True)
     assert packet.reason_code.value in result.reason_codes
+
+
+# ── the model may add resolutions, never remove ambiguity ───────────────────
+
+def test_case_13_stays_ambiguous_in_the_model_arm():
+    """The regression that made this test necessary.
+
+    The model provider used to *replace* the deterministic set. On hc13 — built
+    so two decompositions reconcile exactly — it found neither, and a correct
+    AMBIGUOUS_MULTIPLE_VERIFIED became NO_HYPOTHESIS_VERIFIED. The system went
+    from knowing it could not resolve the case to wrongly believing it had.
+
+    The candidate sets are pooled now, so the model is strictly additive.
+    """
+    import csv
+    import tempfile
+    from pathlib import Path as _Path
+
+    from eval.arms import run_arm
+
+    with tempfile.TemporaryDirectory() as tmp:
+        path = _Path(tmp) / "exceptions.csv"
+        run_arm("full", seed=SEED, n=200, rate=0.25, hard_cases=True,
+                exceptions_path=path)
+        rows = {r["payment_id"]: r["reason_code"] for r in
+                csv.DictReader(line for line in path.open() if not line.startswith("#"))}
+
+    assert rows["pay_hc13"] == "ambiguous_multiple_verified"
+
+
+def test_the_model_arm_never_resolves_fewer_cases_than_rules_alone():
+    """Pooling makes the model additive by construction. Assert the property
+    rather than trusting the construction."""
+    from eval.arms import run_arm
+
+    rules = run_arm("rules", seed=SEED, n=200, rate=0.25, hard_cases=True)
+    full = run_arm("full", seed=SEED, n=200, rate=0.25, hard_cases=True)
+
+    rules_resolved = rules.reason_codes.get("verified", 0)
+    full_resolved = full.reason_codes.get("verified", 0)
+    assert full_resolved >= rules_resolved
+
+
+def test_ambiguity_found_by_rules_survives_the_model_arm():
+    """A case the deterministic set proves ambiguous must stay ambiguous."""
+    from eval.arms import run_arm
+
+    rules = run_arm("rules", seed=SEED, n=200, rate=0.25, hard_cases=True)
+    full = run_arm("full", seed=SEED, n=200, rate=0.25, hard_cases=True)
+
+    assert full.reason_codes.get("ambiguous_multiple_verified", 0) >= (
+        rules.reason_codes.get("ambiguous_multiple_verified", 0)
+    )
+
+
+def test_the_deterministic_hypotheses_are_present_in_the_model_arm(injected):
+    """hc13's designed outcome had NO coverage in the arm being shipped, because
+    the model displaced the fixtures that create it."""
+    from eval.arms import run_arm
+
+    full = run_arm("full", seed=SEED, n=200, rate=0.25, hard_cases=True)
+    assert full.verdicts.get("VERIFIED", 0) >= 2, (
+        "hc13's two verifying hypotheses are missing from the model arm"
+    )

@@ -22,7 +22,11 @@ import redis as redis_lib
 from statesync.classifier.deterministic import classify
 from statesync.classifier.escalation import build_packet
 from statesync.classifier.llm_provider import LLMHypothesisProvider
-from statesync.classifier.provider import HypothesisProvider, HypothesisRequest
+from statesync.classifier.provider import (
+    HypothesisProvider,
+    HypothesisRequest,
+    UnionHypothesisProvider,
+)
 from statesync.classifier.verifier import ArtifactIndex, Component
 from statesync.config import BASE_TIME, REDIS_URL, SEED, STALENESS_WINDOW
 from statesync.executor.runner import RepairRunner
@@ -187,6 +191,7 @@ def run_arm(
     injected = inject_clean(generate_batch(seed=seed, n=n), seed=seed, rate=rate)
     hard_case_count = 0
     hard_payment_ids: set[str] = set()
+    deterministic_provider: HypothesisProvider | None = None
     late_arrivals: list[Any] = []
     artifacts: ArtifactIndex | None = None
     client_kind: str = ClientKind.OFFLINE
@@ -200,18 +205,24 @@ def run_arm(
         hard_case_count = len(hard.cases)
         hard_payment_ids = hard.payment_ids
         late_arrivals = list(hard.late_arrivals)
-        # Arm 3 asks a model; the fixture provider is arm 2's deterministic
-        # stand-in. Letting the hard-case fixtures win here would have arm 3
-        # silently reading canned answers and reporting zero model calls.
         if provider is None and arm != "full":
             provider = hard.provider
+        deterministic_provider = hard.provider
         artifacts = hard.artifacts
 
     if arm == "full" and provider is None:
-        # Arm 3 asks a provider instead of reading fixtures. Everything else —
-        # the verifier, the packet, the bounds — is unchanged from Phase 4.
+        # Arm 3 pools the model WITH the deterministic set rather than
+        # replacing it. Replacing lost hc13's correct ambiguity finding: the
+        # model found neither valid explanation and reported "nothing
+        # verified", turning a case the system knew it could not resolve into
+        # one it wrongly believed it had settled. Pooled, the model is strictly
+        # additive — it can add a resolution, never remove an ambiguity.
         client, client_kind = resolve_client()
-        provider = LLMHypothesisProvider(cache=LLMCache(), client=client)
+        model = LLMHypothesisProvider(cache=LLMCache(), client=client)
+        provider = (
+            UnionHypothesisProvider([deterministic_provider, model], model_index=1)
+            if deterministic_provider is not None else model
+        )
     if arm == "full":
         if artifacts is None:
             artifacts = ArtifactIndex({p.payment_id for p in injected.batch.payments})
@@ -370,8 +381,11 @@ def run_arm(
         # Only a real LLM provider counts as an LLM call. Arm 2 consults a
         # fixture provider, and reporting that as an LLM call would undercut
         # the honest framing that arm 2 contains no AI at all.
+        # Only the model member's calls count as LLM calls; the deterministic
+        # member's consultations are not model usage.
         llm_calls=(
-            getattr(provider, "calls", 0)
+            provider.model_calls if isinstance(provider, UnionHypothesisProvider)
+            else getattr(provider, "calls", 0)
             if isinstance(provider, LLMHypothesisProvider) else 0
         ),
         provider_calls=getattr(provider, "calls", 0),

@@ -163,3 +163,37 @@ hard-case packets built without the base amount the eval passed, and
 `tests/integration/test_reporting_consistency.py` asserts agreement *across*
 outputs rather than within any one of them. Extend it for every new surface,
 the Phase 6 API especially.
+
+
+## 11. The verifier is sound but not complete
+
+It accepts nothing that fails to reconcile, cite, and price consistently — so
+a fabricated explanation cannot get through. **It cannot detect an explanation
+that was never proposed.** Ambiguity is only visible among generated
+candidates, which means a proposer that misses the second valid decomposition
+turns a correctly-ambiguous case into false confidence.
+
+This is not hypothetical. Hard case 13 is built so that two decompositions
+reconcile exactly. When the model provider *replaced* the deterministic
+candidate set, it found neither, and a correct
+`AMBIGUOUS_MULTIPLE_VERIFIED` became `NO_HYPOTHESIS_VERIFIED` — the system went
+from knowing it could not resolve the case to wrongly believing it had. A
+weaker proposer makes this *more* likely, not less.
+
+Two consequences, both load-bearing:
+
+1. **Candidate sets are pooled, never replaced.** Deterministic hypotheses stay
+   in the pool and model hypotheses are added to it, so the model can add a
+   resolution but can never remove an ambiguity the deterministic set already
+   established. Pooling may push other cases *into* ambiguity that previously
+   read as resolved; that is correct behaviour. More escalations with sound
+   reasoning beats fewer with unsound ones.
+
+2. **Say the limit out loud.** The claim this project rests on is that the
+   system knows when it does not know. That claim is bounded by what was
+   proposed, and stating the bound is the difference between it reading as
+   sophistication and reading as a hole someone else found.
+
+Before pooling, hc13's designed outcome had **no coverage at all** in the arm
+being shipped, because the fixtures that create the ambiguity were displaced.
+`test_case_13_stays_ambiguous_in_the_model_arm` closes that.

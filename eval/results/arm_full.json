@@ -11,16 +11,16 @@
   "fee_priced": 6,
   "fee_unpriced": 1,
   "hard_cases": 15,
-  "hypotheses_generated": 6,
+  "hypotheses_generated": 16,
   "injected": 124,
   "inspections": 1040,
   "invariant_delta_paise": -18253746,
   "invariant_ok": false,
-  "ledger_entries": 286,
-  "llm_calls": 11,
+  "ledger_entries": 285,
+  "llm_calls": 10,
   "misclassified": 0,
   "network_calls": 0,
-  "pass2_fired": 5,
+  "pass2_fired": 4,
   "pass2_resolved": 1,
   "per_class": {
     "captured_no_order": {
@@ -44,10 +44,11 @@
       "rate_bps": 10000
     }
   },
-  "provider_calls": 11,
+  "provider_calls": 10,
   "reason_codes": {
+    "ambiguous_multiple_verified": 1,
     "fee_schedule_unknown": 1,
-    "no_hypothesis_verified": 4,
+    "no_hypothesis_verified": 3,
     "verified": 2
   },
   "records": 500,
@@ -55,14 +56,16 @@
   "storage": "in-memory",
   "throughput": {
     "p50_us": 3,
-    "p99_us": 23,
+    "p99_us": 13,
     "records": 1040,
-    "wall_clock_us": 28386
+    "wall_clock_us": 25593
   },
   "transient_filtered": 1,
   "verdicts": {
-    "ARITHMETIC_FAILED": 2,
-    "ARTIFACT_MISSING": 2,
-    "VERIFIED": 2
+    "ARITHMETIC_FAILED": 6,
+    "ARTIFACT_MISSING": 4,
+    "RANGE_VIOLATION": 1,
+    "RATE_INCONSISTENT": 1,
+    "VERIFIED": 4
   }
 }

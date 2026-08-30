@@ -24,7 +24,7 @@ from statesync.classifier.verifier import ArtifactIndex, Proposal
 
 __all__ = [
     "FixtureHypothesisProvider", "HypothesisProvider", "HypothesisRequest",
-    "MAX_HYPOTHESES", "MAX_PASSES",
+    "MAX_HYPOTHESES", "MAX_PASSES", "UnionHypothesisProvider",
 ]
 
 MAX_PASSES = 2
@@ -92,3 +92,76 @@ class FixtureHypothesisProvider:
         self.calls += 1
         key = f"{request.case_id}:retry" if request.rejected_summaries else request.case_id
         return list(self.fixtures.get(key, []))[:MAX_HYPOTHESES]
+
+
+@dataclass
+class UnionHypothesisProvider:
+    """Several proposers, pooled. Members add candidates; none replace others.
+
+    **Why this exists.** The verifier is sound but not complete: it can only
+    detect ambiguity among hypotheses that were generated. A proposer that
+    misses the second valid explanation turns a correctly-ambiguous case into
+    false confidence, or into a false "nothing verified" — and a weaker
+    proposer makes that *more* likely, not less. The guard catches
+    fabrication; nothing catches omission.
+
+    Observed directly: hc13 is constructed so two decompositions reconcile
+    exactly. Under the rules arm it correctly reported
+    AMBIGUOUS_MULTIPLE_VERIFIED. Under the model arm the LLM provider
+    displaced the deterministic set, found neither explanation, and reported
+    NO_HYPOTHESIS_VERIFIED — losing a correct ambiguity finding, and leaving
+    the project's most important hard case untested in the arm being shipped.
+
+    Pooling makes the model strictly additive. It can add a resolution; it can
+    never remove ambiguity the deterministic set already established.
+
+    Unioning may push other cases into ambiguity that previously read as
+    resolved. That is correct: more escalations with sound reasoning beats
+    fewer with unsound ones.
+    """
+
+    members: list[HypothesisProvider]
+    model_index: int | None = None
+    """Which member is the model, for attributing `llm_calls` honestly."""
+
+    calls: int = 0
+    degraded: bool = False
+
+    @property
+    def model_calls(self) -> int:
+        if self.model_index is None:
+            return 0
+        return int(getattr(self.members[self.model_index], "calls", 0))
+
+    @property
+    def network_calls(self) -> int:
+        if self.model_index is None:
+            return 0
+        return int(getattr(self.members[self.model_index], "network_calls", 0))
+
+    def propose(self, request: HypothesisRequest) -> list[Proposal]:
+        self.calls += 1
+        pooled: list[Proposal] = []
+        seen: set[tuple[tuple[str, int, str | None], ...]] = set()
+
+        for member in self.members:
+            try:
+                proposals = member.propose(request)
+            except Exception:
+                # A degraded member must not cost the others their candidates.
+                self.degraded = True
+                continue
+
+            for proposal in proposals:
+                # Two providers reaching the same explanation is agreement,
+                # not ambiguity. Counting it twice manufactures a second
+                # "verified" out of one idea.
+                fingerprint = tuple(
+                    sorted((c.name, c.amount_paise, c.cites) for c in proposal.components)
+                )
+                if fingerprint in seen:
+                    continue
+                seen.add(fingerprint)
+                pooled.append(proposal)
+
+        return pooled[:MAX_HYPOTHESES]
