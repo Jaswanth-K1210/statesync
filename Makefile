@@ -10,7 +10,8 @@ COMPOSE := docker compose
 
 .DEFAULT_GOAL := help
 .PHONY: help setup up down test test-unit test-prop test-int test-chaos test-e2e \
-        smoke smoke-frontend verify determinism eval eval-arm demo lint clean warm-cache
+        smoke smoke-frontend verify determinism eval eval-arm demo lint clean \
+        warm-cache readme reproduce
 
 help:  ## show this help
 	@grep -hE '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) | sort | \
@@ -76,8 +77,14 @@ warm-cache:  ## populate and commit the LLM cache (records which client filled i
 eval-arm:  ## a single arm, e.g. make eval-arm ARM=rules
 	$(PY) -m eval.harness --seed $(SEED) --n 500 --arm $(ARM)
 
-demo:  ## the exact video sequence (Phase 7)
-	@echo "demo: Phase 7."
+readme:  ## regenerate README.md from measured output
+	$(PY) -m eval.readme
+
+demo:  ## the exact video sequence, from a warm cache and no API key
+	@bash scripts/demo.sh
+
+reproduce:  ## clone into a temp dir and run setup + verify, as a stranger would
+	@bash scripts/reproduce.sh
 
 clean:  ## drop caches and stop services
 	$(COMPOSE) down -v
