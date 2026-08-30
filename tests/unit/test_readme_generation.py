@@ -136,3 +136,13 @@ def test_a_stale_readme_is_detectable():
 def test_the_deterministic_render_is_reproducible():
     """What the fresh-clone check compares."""
     assert render_readme(include_timing=False) == render_readme(include_timing=False)
+
+
+def test_the_test_count_is_measured_not_zero(rendered):
+    """A templated figure rendering as 0 still looks measured, which is worse
+    than a hardcoded one. The generator raises rather than publishing zero."""
+    import re as _re
+
+    match = _re.search(r"lint, types, ([\d,]+) tests", rendered)
+    assert match, "the test count line is missing"
+    assert int(match.group(1).replace(",", "")) > 100

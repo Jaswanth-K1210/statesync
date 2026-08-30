@@ -44,15 +44,36 @@ def load_manifest() -> dict[str, Any]:
 
 
 def _test_count() -> int:
-    """Collected, not counted by hand."""
+    """Collected, never counted by hand.
+
+    Raises rather than returning zero. A templated figure that silently
+    renders as 0 is worse than a hardcoded one, because it still looks
+    measured — which is the whole failure mode this module exists to prevent.
+    """
     proc = subprocess.run(
-        [".venv/bin/python", "-m", "pytest", "tests/", "--collect-only", "-q"],
+        [".venv/bin/python", "-m", "pytest", "tests/", "--collect-only"],
         cwd=PROJECT_ROOT, capture_output=True, text=True, check=False,
     )
-    for line in reversed(proc.stdout.splitlines()):
-        if "tests collected" in line:
+    lines = proc.stdout.splitlines()
+
+    for line in reversed(lines):
+        if "tests collected" in line or "test collected" in line:
             return int(line.split()[0])
-    return 0
+
+    # `-q` in pyproject's addopts makes an explicit `-q` into `-qq`, which
+    # prints per-file counts instead of a total. Sum them.
+    total = sum(
+        int(line.rsplit(":", 1)[1])
+        for line in lines
+        if line.startswith("tests/") and line.rsplit(":", 1)[-1].strip().isdigit()
+    )
+    if total:
+        return total
+
+    raise RuntimeError(
+        f"could not determine the test count from pytest output; "
+        f"refusing to publish a figure of 0. rc={proc.returncode}"
+    )
 
 
 TEMPLATE = """# StateSync
