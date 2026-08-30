@@ -366,3 +366,80 @@ def test_s5_the_cache_manifest_says_which_client_filled_it():
 
     manifest = json.loads((CACHE_DIR / "MANIFEST.json").read_text())
     assert manifest["client_kind"] in ("live", "offline")
+
+
+# ── S6 · fail-closed ────────────────────────────────────────────────────────
+# The last rung. A reconciler that keeps writing while its own audit trail is
+# compromised is worse than no reconciler, so this runs before every commit.
+
+def test_s6_a_tampered_chain_halts_the_run_with_zero_writes():
+    import redis as redis_lib
+
+    from statesync.executor.runner import RepairRunner
+    from statesync.executor.store import InMemoryRepairStore
+    from statesync.ledger.chain import ChainIntegrityError
+    from statesync.models.domain import Divergence
+    from statesync.models.enums import DivergenceClass
+    from statesync.policy.blast_radius import BlastRadiusCap
+    from statesync.policy.gates import PolicyGate
+
+    now = datetime(2026, 9, 5, tzinfo=UTC)
+    client = redis_lib.Redis.from_url(REDIS_URL, decode_responses=True)
+    client.flushdb()
+
+    led = Ledger(clock=lambda: now)
+    for i in range(5):
+        led.append("SMOKE", i=i)
+    led.entries[2].payload["i"] = 999          # the audit trail is now suspect
+
+    store = InMemoryRepairStore()
+    runner = RepairRunner(
+        redis=client, store=store, ledger=led,
+        gate=PolicyGate(value_threshold_paise=10_000_000),
+        cap=BlastRadiusCap(max_repairs=50), clock=lambda: now,
+    )
+    divergence = Divergence(klass=DivergenceClass.CAPTURED_NO_ORDER,
+                            payment_id="pay_smoke", order_id=None,
+                            amount_paise=1000, observed_at=now)
+
+    with pytest.raises(ChainIntegrityError):
+        runner.run_batch([divergence])
+
+    assert store.write_count == 0, "a repair landed on a compromised audit trail"
+    client.flushdb()
+
+
+def test_s6_the_break_index_is_reported():
+    """An ops person needs to know where the trail stopped being trustworthy."""
+    from statesync.ledger.chain import ChainIntegrityError, verify_or_halt
+
+    now = datetime(2026, 9, 5, tzinfo=UTC)
+    led = Ledger(clock=lambda: now)
+    for i in range(6):
+        led.append("SMOKE", i=i)
+    led.entries[3].payload["i"] = 999
+
+    with pytest.raises(ChainIntegrityError, match="index 3"):
+        verify_or_halt(led)
+
+
+def test_s6_an_intact_chain_does_not_halt_anything():
+    """The other half of the claim: no false alarm on a good chain."""
+    from statesync.ledger.chain import verify_or_halt
+
+    now = datetime(2026, 9, 5, tzinfo=UTC)
+    led = Ledger(clock=lambda: now)
+    for i in range(5):
+        led.append("SMOKE", i=i)
+    verify_or_halt(led)
+
+
+def test_s6_the_tamper_harness_exits_non_zero():
+    """Beat 9 of the demo, asserted rather than rehearsed."""
+    import subprocess
+    import sys
+
+    proc = subprocess.run([sys.executable, "-m", "eval.tamper"],
+                          capture_output=True, text=True)
+    assert proc.returncode != 0
+    assert "HALTED" in proc.stderr

@@ -24,7 +24,20 @@ from typing import Any
 
 from statesync.ledger.canonical import canonical
 
-__all__ = ["GENESIS", "Ledger", "LedgerEntry", "chain_hash"]
+__all__ = [
+    "GENESIS", "ChainIntegrityError", "Ledger", "LedgerEntry", "chain_hash",
+    "verify_or_halt",
+]
+
+
+class ChainIntegrityError(RuntimeError):
+    """The audit trail cannot be trusted, so nothing may be written.
+
+    A reconciliation system that keeps writing while its own audit trail is
+    compromised is worse than no system at all. This is raised, never caught
+    and continued from: the run halts, the process exits non-zero, and zero
+    repairs land. Fail closed, never open.
+    """
 
 GENESIS = "0" * 64
 
@@ -122,3 +135,22 @@ class Ledger:
 
     def has(self, event_type: str) -> bool:
         return any(e.event_type == event_type for e in self.entries)
+
+
+def verify_or_halt(ledger: Ledger) -> None:
+    """Walk the chain and refuse to continue if it does not verify.
+
+    Called before the first repair of a batch, never after — verifying
+    afterwards would mean the writes had already happened, which is precisely
+    the outcome this exists to prevent.
+
+    An empty chain is intact. Nothing written yet is not the same as something
+    rewritten.
+    """
+    ok, index = ledger.verify()
+    if ok:
+        return
+    raise ChainIntegrityError(
+        f"audit chain broken at entry index {index}; halting all repairs. "
+        f"No write will be attempted while the trail is compromised."
+    )

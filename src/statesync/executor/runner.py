@@ -24,7 +24,7 @@ from typing import Any
 
 from statesync.executor.repairs import repair_for
 from statesync.executor.store import RepairStore
-from statesync.ledger.chain import Ledger
+from statesync.ledger.chain import Ledger, verify_or_halt
 from statesync.models.domain import Divergence
 from statesync.policy.blast_radius import BlastRadiusCap
 from statesync.policy.gates import PolicyGate
@@ -85,6 +85,18 @@ class RepairRunner:
         elif result.status == RepairStatus.ESCALATE:
             self._counts["escalated"] += 1
         return result
+
+    def run_batch(self, divergences: list[Divergence]) -> list[RepairResult]:
+        """Repair a batch, refusing to start if the audit trail is broken.
+
+        The chain is walked **before** the first repair. At these volumes it
+        costs milliseconds, and the alternative — discovering the break after
+        writing — is the failure mode the whole guarantee exists to prevent.
+        The blast-radius budget is untouched when the guard fires, so a halted
+        run leaves no trace of having considered acting.
+        """
+        verify_or_halt(self.ledger)
+        return [self.run(divergence) for divergence in divergences]
 
     def summary(self) -> dict[str, int]:
         """Integers only — safe to write to the ledger and to a report."""
