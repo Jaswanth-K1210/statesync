@@ -1,0 +1,26 @@
+{
+  "note": "Real provider events observed during development, kept as dated evidence. The behaviours are proven deterministically by tests/chaos/test_provider_fallback.py; these records corroborate, they do not prove.",
+  "events": [
+    {
+      "at": "2026-08-30T07:33:31Z",
+      "event": "fallback_chain_exercised_live",
+      "chain": [
+        "openrouter",
+        "groq"
+      ],
+      "failures": [
+        [
+          "openrouter",
+          "HTTP 402"
+        ]
+      ],
+      "answered_by": "groq",
+      "detail": "OpenRouter authenticated but returned HTTP 402 (credit exhausted); the chain fell through to Groq, which answered. primary -> secondary, against real providers."
+    },
+    {
+      "event": "cdn_blocked_default_user_agent",
+      "provider": "groq",
+      "detail": "Requests sent as Python-urllib/3.x were rejected with HTTP 403 and Cloudflare code 1010, indistinguishable from a bad credential. Fixed by sending a real User-Agent."
+    }
+  ]
+}

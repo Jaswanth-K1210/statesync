@@ -1,21 +1,20 @@
 {
-  "populated_at": "2026-08-30T07:33:31Z",
+  "populated_at": "2026-08-30T07:48:09Z",
   "client_kind": "live",
   "seed": 20260905,
   "records": 500,
   "entries": 8,
-  "provider_calls_cold": 8,
-  "cold_wall_clock_ms": 22085,
-  "answered_by": "groq",
+  "provider_calls_cold": 0,
+  "cold_wall_clock_ms": 77,
+  "answered_by": "",
+  "model": "",
   "chain": [
-    "openrouter",
-    "groq"
+    "groq",
+    "openrouter"
   ],
-  "chain_failures": [
-    [
-      "openrouter",
-      "HTTP 402"
-    ]
-  ],
+  "chain_failures": [],
+  "provider_latency_ms": 0,
+  "chain_overhead_ms": 77,
+  "mean_call_ms": 0,
   "note": "Populated from a live provider. Cold cost figures are real."
 }

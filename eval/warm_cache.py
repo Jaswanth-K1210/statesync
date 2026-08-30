@@ -26,6 +26,17 @@ from statesync.llm.client import ClientKind, resolve_client
 MANIFEST = CACHE_DIR / "MANIFEST.json"
 
 
+def _model_for(answered_by: str) -> str:
+    """Which model produced these responses. '8 calls, 22s' means nothing
+    without it, and the model was switched during diagnosis."""
+    import os
+
+    return {
+        "groq": os.getenv("GROQ_MODEL", "openai/gpt-oss-120b"),
+        "openrouter": os.getenv("OPENROUTER_MODEL", "anthropic/claude-sonnet-4"),
+    }.get(answered_by, answered_by)
+
+
 def main() -> int:
     import time
 
@@ -35,12 +46,31 @@ def main() -> int:
     client, kind = resolve_client()
     provider = LLMHypothesisProvider(cache=LLMCache(), client=client)
 
+    # Time the successful provider calls separately from everything else.
+    provider_ns = 0
+    inner = client
+
+    def timed(prompt: str) -> str:
+        nonlocal provider_ns
+        at = time.perf_counter_ns()
+        try:
+            return inner(prompt)
+        finally:
+            provider_ns += time.perf_counter_ns() - at
+
+    provider.client = timed
+
     started = time.perf_counter()
     result = run_arm("full", seed=SEED, n=500, rate=0.25, hard_cases=True,
                      provider=provider)
     elapsed_ms = int((time.perf_counter() - started) * 1000)
+    provider_ms = provider_ns // 1_000_000
+    answered = getattr(client, "answered_by", kind)
 
-    entries = sorted(p.name for p in CACHE_DIR.glob("*.json") if p.name != "MANIFEST.json")
+    entries = sorted(
+        p.name for p in CACHE_DIR.glob("*.json")
+        if p.name not in {"MANIFEST.json", "OBSERVED_EVENTS.json"}
+    )
     MANIFEST.write_text(
         json.dumps({
             "populated_at": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
@@ -50,9 +80,15 @@ def main() -> int:
             "entries": len(entries),
             "provider_calls_cold": result.network_calls,
             "cold_wall_clock_ms": elapsed_ms,
-            "answered_by": getattr(client, "answered_by", kind),
+            "answered_by": answered,
+            "model": _model_for(answered),
             "chain": getattr(client, "names", [kind]),
             "chain_failures": getattr(client, "failures", []),
+            # Wall clock alone is contaminated by failed links and their
+            # backoff. A README quotes generation cost, so the two are split.
+            "provider_latency_ms": provider_ms,
+            "chain_overhead_ms": max(elapsed_ms - provider_ms, 0),
+            "mean_call_ms": provider_ms // max(result.network_calls, 1),
             "note": (
                 "Populated by the offline heuristic client, which is NOT a model. "
                 "Cold provider cost is unmeasured until an API key is configured."

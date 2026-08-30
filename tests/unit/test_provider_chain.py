@@ -137,7 +137,11 @@ def test_both_keys_resolve_to_a_two_link_chain(monkeypatch):
     monkeypatch.setenv("GROQ_API_KEY", "gsk_test")
     monkeypatch.setattr("statesync.llm.client.apply_dotenv", lambda *a, **k: None)
     client, _ = resolve_client()
-    assert client.names == ["openrouter", "groq"], "primary then secondary"
+    # Ordered by observed capacity: OpenRouter authenticates on this account
+    # but has no credit, so putting it first spends a round trip on a 402
+    # before every call. The fallback path is proven by an injected 402 in
+    # tests/chaos/test_provider_fallback.py, not by that accident.
+    assert client.names == ["groq", "openrouter"], "primary then secondary"
 
 
 # ── terminal failures are not retried ───────────────────────────────────────

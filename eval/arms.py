@@ -76,6 +76,10 @@ class ArmResult:
     fee_coverage_bps: int = 0
     fee_priced: int = 0
     fee_unpriced: int = 0
+    verdicts: dict[str, int] = field(default_factory=dict)
+    hypotheses_generated: int = 0
+    pass2_fired: int = 0
+    pass2_resolved: int = 0
     network_calls: int = 0
     provider_calls: int = 0
     client_kind: str = ""
@@ -149,6 +153,10 @@ class ArmResult:
             "fee_coverage_bps": self.fee_coverage_bps,
             "fee_priced": self.fee_priced,
             "fee_unpriced": self.fee_unpriced,
+            "verdicts": dict(sorted(self.verdicts.items())),
+            "hypotheses_generated": self.hypotheses_generated,
+            "pass2_fired": self.pass2_fired,
+            "pass2_resolved": self.pass2_resolved,
             "network_calls": self.network_calls,
             "provider_calls": self.provider_calls,
             "client_kind": self.client_kind,
@@ -227,6 +235,7 @@ def run_arm(
     unresolved: list[Divergence] = []
     reasons: dict[str, ReasonCode] = {}
     all_found: list[Divergence] = []
+    packets: list[Any] = []
 
     for pass_no in range(passes):
         now = _RECONCILED_AT + STALENESS_WINDOW * 2 * pass_no
@@ -265,9 +274,11 @@ def run_arm(
                         # with the config that would resolve it.
                         reasons[key] = ReasonCode.FEE_SCHEDULE_UNKNOWN
                     else:
-                        reasons[key] = _escalation_reason(
-                            divergence, provider, artifacts, ledger, result.reason_code
-                        )
+                        packet = _escalate(divergence, provider, artifacts, ledger,
+                                           result.reason_code)
+                        reasons[key] = packet.reason_code if packet else result.reason_code
+                        if packet is not None:
+                            packets.append(packet)
 
         # The late webhook lands between passes, so pass 2 sees a batch that
         # has moved on — as a real one would.
@@ -311,6 +322,14 @@ def run_arm(
     unpriced = len([d for d in all_found if d.detail.get("fee_source") == "unknown"])
     priced = len([d for d in all_found if d.detail.get("fee_source")
                   and d.detail["fee_source"] != "unknown"])
+
+    # Verifier outcomes, broken out by rejection reason. The rejection rate is
+    # the evidence the guard is load-bearing: a model that proposes freely and
+    # is refused often is a safer story than one that is never tested.
+    verdicts: dict[str, int] = {}
+    for packet in packets:
+        for hypothesis in packet.hypotheses:
+            verdicts[hypothesis.verdict.value] = verdicts.get(hypothesis.verdict.value, 0) + 1
 
     hard_case_keys = {
         d.deterministic_key() for d in all_found if d.payment_id in hard_payment_ids
@@ -370,6 +389,12 @@ def run_arm(
         reason_codes={r.value: sum(1 for v in reasons.values() if v == r)
                       for r in {*reasons.values()}},
         reason_codes_total=len(reasons),
+        verdicts=verdicts,
+        hypotheses_generated=sum(len(p.hypotheses) for p in packets),
+        pass2_fired=sum(1 for p in packets if p.passes_used >= 2),
+        pass2_resolved=sum(
+            1 for p in packets if p.passes_used >= 2 and p.reason_code == ReasonCode.VERIFIED
+        ),
         fee_priced=priced,
         fee_unpriced=unpriced,
         fee_coverage_bps=(priced * 10_000 // (priced + unpriced)) if (priced + unpriced) else 0,
@@ -395,13 +420,13 @@ def make_repair_runner(blast_radius: int = 200, flush: bool = False) -> RepairRu
     )
 
 
-def _escalation_reason(
+def _escalate(
     divergence: Divergence,
     provider: HypothesisProvider | None,
     artifacts: ArtifactIndex | None,
     ledger: Ledger,
     fallback: ReasonCode,
-) -> ReasonCode:
+) -> Any:
     """Run the bounded propose-verify loop for one under-determined divergence.
 
     With no provider configured the outcome is `fallback` — which is honest:
@@ -409,7 +434,7 @@ def _escalation_reason(
     with an LLM provider; the loop, the verifier and the packet do not change.
     """
     if provider is None or artifacts is None:
-        return fallback
+        return None
 
     residual = int(divergence.detail.get("residual_paise", "0"))
     known = int(divergence.detail.get("known_paise", "0"))
@@ -431,4 +456,4 @@ def _escalation_reason(
         ledger=ledger,
         base_paise=divergence.amount_paise,
     )
-    return packet.reason_code
+    return packet

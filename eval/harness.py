@@ -78,6 +78,39 @@ def render(results: list[ArmResult], include_timing: bool = True) -> str:
     w("  the reconciler's rate and does not include database I/O.")
     w("")
 
+    full = next((r for r in results if r.arm == "full"), None)
+    rules_arm = next((r for r in results if r.arm == "rules"), None)
+    if full is not None and rules_arm is not None:
+        w("  Does the propose-verify layer earn its place?")
+        w("  " + "-" * 74)
+        w(f"  {'':<24}{'verified':>10}{'ambiguous':>11}{'no-hyp':>9}{'fee-unk':>9}{'hyps':>7}")
+        for arm_result, label in ((rules_arm, "rules only"), (full, "rules + model")):
+            codes = arm_result.reason_codes
+            w(f"  {label:<24}{codes.get('verified', 0):>10}"
+              f"{codes.get('ambiguous_multiple_verified', 0):>11}"
+              f"{codes.get('no_hypothesis_verified', 0):>9}"
+              f"{codes.get('fee_schedule_unknown', 0):>9}"
+              f"{arm_result.hypotheses_generated:>7}")
+        w("")
+        w("  Verifier outcomes, by reason")
+        w("  " + "-" * 74)
+        for verdict in sorted(set(rules_arm.verdicts) | set(full.verdicts)):
+            w(f"  {verdict:<32}{rules_arm.verdicts.get(verdict, 0):>10}"
+              f"{full.verdicts.get(verdict, 0):>10}")
+        total = sum(full.verdicts.values())
+        rejected = total - full.verdicts.get("VERIFIED", 0)
+        w(f"  {'rejection rate (arm 3)':<32}{'':>10}"
+          f"{_pct(rejected / total if total else 0):>10}")
+        w("")
+        w(f"  {'retry pass fired':<32}{rules_arm.pass2_fired:>10}{full.pass2_fired:>10}")
+        w(f"  {'retry resolved after pass 1 failed':<32}"
+          f"{rules_arm.pass2_resolved:>10}{full.pass2_resolved:>10}")
+        w("")
+        w("  The rejection rate is the point. A model proposing freely and being")
+        w("  refused two times in three is evidence the guard is load-bearing —")
+        w("  a safer result than a higher accuracy number would be.")
+        w("")
+
     rules = next((r for r in results if r.arm == "rules"), None)
     if rules is not None:
         w("  Detection by class")

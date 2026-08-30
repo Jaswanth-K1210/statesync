@@ -11,6 +11,7 @@
   "fee_priced": 6,
   "fee_unpriced": 1,
   "hard_cases": 15,
+  "hypotheses_generated": 7,
   "injected": 124,
   "inspections": 1040,
   "invariant_delta_paise": -18253746,
@@ -19,6 +20,8 @@
   "llm_calls": 0,
   "misclassified": 0,
   "network_calls": 0,
+  "pass2_fired": 5,
+  "pass2_resolved": 0,
   "per_class": {
     "captured_no_order": {
       "detected": 31,
@@ -62,9 +65,15 @@
   "storage": "in-memory",
   "throughput": {
     "p50_us": 3,
-    "p99_us": 22,
+    "p99_us": 16,
     "records": 1040,
-    "wall_clock_us": 144194
+    "wall_clock_us": 129731
   },
-  "transient_filtered": 1
+  "transient_filtered": 1,
+  "verdicts": {
+    "ARITHMETIC_FAILED": 3,
+    "ARTIFACT_MISSING": 1,
+    "RANGE_VIOLATION": 1,
+    "VERIFIED": 2
+  }
 }

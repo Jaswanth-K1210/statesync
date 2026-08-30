@@ -153,6 +153,21 @@ def resolve_client() -> tuple[Callable[[str], str], str]:
 
     links: list[tuple[str, Callable[[str], str]]] = []
 
+    # Groq is primary. Ordering is by observed capacity, not by preference:
+    # OpenRouter authenticates but has no credit on this account, so putting it
+    # first spends a round trip on a 402 before every single call.
+    #
+    # The fallback path is NOT proven by that accident. It is proven by
+    # tests/chaos/test_provider_fallback.py, which injects a 402 deterministically
+    # — so the property survives someone topping up the account, or reordering
+    # this list again.
+    groq_key = os.getenv("GROQ_API_KEY")
+    if groq_key:
+        links.append((
+            "groq",
+            groq_client(groq_key, os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")),
+        ))
+
     openrouter_key = os.getenv("OPENROUTER_API_KEY")
     if openrouter_key:
         links.append((
@@ -161,13 +176,6 @@ def resolve_client() -> tuple[Callable[[str], str], str]:
                 openrouter_key,
                 os.getenv("OPENROUTER_MODEL", "anthropic/claude-sonnet-4"),
             ),
-        ))
-
-    groq_key = os.getenv("GROQ_API_KEY")
-    if groq_key:
-        links.append((
-            "groq",
-            groq_client(groq_key, os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")),
         ))
 
     if links:
