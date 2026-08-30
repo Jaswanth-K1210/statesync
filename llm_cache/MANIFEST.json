@@ -1,20 +1,27 @@
 {
-  "populated_at": "2026-08-30T07:48:09Z",
+  "populated_at": "2026-08-30T07:55:50Z",
   "client_kind": "live",
   "seed": 20260905,
   "records": 500,
   "entries": 8,
-  "provider_calls_cold": 0,
-  "cold_wall_clock_ms": 77,
-  "answered_by": "",
-  "model": "",
   "chain": [
     "groq",
     "openrouter"
   ],
   "chain_failures": [],
-  "provider_latency_ms": 0,
-  "chain_overhead_ms": 77,
-  "mean_call_ms": 0,
+  "cold_measured_this_run": false,
+  "cold": {
+    "provider_calls_cold": 8,
+    "cold_wall_clock_ms": 12042,
+    "provider_latency_ms": 11945,
+    "mean_request_ms": 1493,
+    "http_requests": 8,
+    "retries": 0,
+    "backoff_ms": 0,
+    "chain_overhead_ms": 96,
+    "model": "openai/gpt-oss-120b",
+    "answered_by": "groq",
+    "measured_at": "2026-08-30T07:55:48Z"
+  },
   "note": "Populated from a live provider. Cold cost figures are real."
 }

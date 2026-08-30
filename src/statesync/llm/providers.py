@@ -18,13 +18,14 @@ import time
 import urllib.error
 import urllib.request
 from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
 
 from statesync.config import PROJECT_ROOT
 
 __all__ = [
-    "MAX_ATTEMPTS", "ProviderError", "apply_dotenv", "groq_client", "load_dotenv",
-    "openrouter_client", "with_retries",
+    "MAX_ATTEMPTS", "STATS", "ProviderError", "RequestStats", "apply_dotenv",
+    "groq_client", "load_dotenv", "openrouter_client", "with_retries",
 ]
 
 
@@ -45,6 +46,33 @@ OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 TIMEOUT_SECONDS = 60
 MAX_TOKENS = int(os.getenv("STATESYNC_LLM_MAX_TOKENS", "1024"))
+
+@dataclass
+class RequestStats:
+    """Time spent in HTTP requests, excluding retry backoff.
+
+    Wrapping the retry helper and timing that instead counts `sleep()` as
+    provider latency, which inflates the mean by however long a rate limit
+    happened to last. A README quotes generation cost, so the request
+    itself is what gets measured.
+    """
+
+    request_ns: int = 0
+    requests: int = 0
+    retries: int = 0
+    backoff_ns: int = 0
+
+    def reset(self) -> None:
+        self.request_ns = self.requests = self.retries = self.backoff_ns = 0
+
+    @property
+    def mean_request_ms(self) -> int:
+        return self.request_ns // 1_000_000 // max(self.requests, 1)
+
+
+STATS = RequestStats()
+"""Process-wide. Only the cache-warming path reads it."""
+
 
 USER_AGENT = "StateSync/0.1 (+https://github.com/statesync)"
 """Sent on every request. Several providers sit behind a CDN that rejects
@@ -114,7 +142,10 @@ def with_retries(
                     raise
                 last = exc
                 if i < len(BACKOFF_SECONDS):
+                    STATS.retries += 1
+                    slept = time.perf_counter_ns()
                     sleep(BACKOFF_SECONDS[i])
+                    STATS.backoff_ns += time.perf_counter_ns() - slept
         assert last is not None
         raise last
 
@@ -139,12 +170,17 @@ def _post_chat(url: str, api_key: str, model: str, prompt: str,
     }
     request = urllib.request.Request(url, data=body, headers=headers, method="POST")
 
+    started = time.perf_counter_ns()
     try:
         with urllib.request.urlopen(request, timeout=TIMEOUT_SECONDS) as response:
             payload = json.loads(response.read().decode("utf-8"))
     except urllib.error.HTTPError as exc:
+        STATS.request_ns += time.perf_counter_ns() - started
+        STATS.requests += 1
         detail = exc.read().decode("utf-8", errors="replace")[:300]
         raise ProviderError(exc.code, f"HTTP {exc.code}: {detail}") from exc
+    STATS.request_ns += time.perf_counter_ns() - started
+    STATS.requests += 1
 
     choices = payload.get("choices") or []
     if not choices:
