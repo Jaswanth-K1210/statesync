@@ -1,9 +1,21 @@
 {
-  "populated_at": "2026-08-29T15:36:33Z",
-  "client_kind": "offline",
+  "populated_at": "2026-08-30T07:33:31Z",
+  "client_kind": "live",
   "seed": 20260905,
   "records": 500,
-  "entries": 12,
-  "provider_calls_cold": 12,
-  "note": "Populated by the offline heuristic client, which is NOT a model. Cold provider cost is unmeasured until an API key is configured."
+  "entries": 8,
+  "provider_calls_cold": 8,
+  "cold_wall_clock_ms": 22085,
+  "answered_by": "groq",
+  "chain": [
+    "openrouter",
+    "groq"
+  ],
+  "chain_failures": [
+    [
+      "openrouter",
+      "HTTP 402"
+    ]
+  ],
+  "note": "Populated from a live provider. Cold cost figures are real."
 }

@@ -12,9 +12,18 @@ from __future__ import annotations
 import json
 import os
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
-__all__ = ["ClientKind", "OfflineHeuristicClient", "resolve_client"]
+from statesync.llm.providers import (
+    ProviderError,
+    apply_dotenv,
+    groq_client,
+    openrouter_client,
+)
+
+__all__ = [
+    "ClientKind", "FallbackClient", "OfflineHeuristicClient", "resolve_client",
+]
 
 
 class ClientKind:
@@ -78,33 +87,90 @@ def _field_from(prompt: str, key: str) -> str:
     return ""
 
 
+@dataclass
+class FallbackClient:
+    """primary -> secondary -> ... Each link is tried in order.
+
+    A link that raises, or returns nothing, has not answered. Every failure is
+    recorded rather than swallowed: a run that quietly fell through to the
+    secondary produces different numbers, and the results table has to be able
+    to say which provider actually answered.
+    """
+
+    links: list[tuple[str, Callable[[str], str]]]
+    answered_by: str = ""
+    failures: list[tuple[str, str]] = field(default_factory=list)
+    disabled: set[str] = field(default_factory=set)
+    """Links that failed terminally — a bad key, no credit, an unknown model.
+    Re-probing those on every prompt costs a round trip each time and buries
+    the real error under a hundred identical ones."""
+
+    @property
+    def names(self) -> list[str]:
+        return [name for name, _ in self.links]
+
+    def __call__(self, prompt: str) -> str:
+        for name, call in self.links:
+            if name in self.disabled:
+                continue
+            try:
+                response = call(prompt)
+            except ProviderError as exc:
+                self.failures.append((name, f"HTTP {exc.status}"))
+                if exc.terminal:
+                    self.disabled.add(name)
+                continue
+            except Exception as exc:
+                self.failures.append((name, type(exc).__name__))
+                continue
+            if not response:
+                self.failures.append((name, "EmptyResponse"))
+                continue
+            self.answered_by = name
+            return response
+
+        raise RuntimeError(
+            f"every provider failed: {self.failures}"
+        )
+
+
 def resolve_client() -> tuple[Callable[[str], str], str]:
     """The best client this environment can reach, and which kind it is.
 
-    Returns the offline client when no provider key is configured. The kind is
-    returned rather than logged so it reaches the results table: a cost figure
-    measured against the offline client is not a provider cost.
+    Returns the offline client when no provider key is configured, or when
+    `STATESYNC_LLM_OFFLINE=1`. The kind is returned rather than logged so it
+    reaches the results table: a cost figure measured against the offline
+    client is not a provider cost.
     """
-    if os.getenv("ANTHROPIC_API_KEY"):
-        try:
-            from anthropic import Anthropic  # noqa: PLC0415
+    # A hard offline switch, checked before anything else. The test suite sets
+    # it so that adding a key to .env cannot silently turn a hermetic suite
+    # into one that makes hundreds of real API calls with backoff — which is
+    # slow, costs money, and makes the tests fail on someone else's rate limit.
+    if os.getenv("STATESYNC_LLM_OFFLINE") == "1":
+        return OfflineHeuristicClient(), ClientKind.OFFLINE
 
-            anthropic = Anthropic()
+    apply_dotenv()
 
-            def live(prompt: str) -> str:
-                message = anthropic.messages.create(
-                    model="claude-sonnet-5",
-                    max_tokens=2048,
-                    messages=[{"role": "user", "content": prompt}],
-                )
-                return "".join(
-                    block.text for block in message.content if block.type == "text"
-                )
+    links: list[tuple[str, Callable[[str], str]]] = []
 
-            return live, ClientKind.LIVE
-        except ImportError:
-            # The key is set but the SDK is absent. Say so by falling back
-            # visibly rather than pretending the key was never there.
-            pass
+    openrouter_key = os.getenv("OPENROUTER_API_KEY")
+    if openrouter_key:
+        links.append((
+            "openrouter",
+            openrouter_client(
+                openrouter_key,
+                os.getenv("OPENROUTER_MODEL", "anthropic/claude-sonnet-4"),
+            ),
+        ))
+
+    groq_key = os.getenv("GROQ_API_KEY")
+    if groq_key:
+        links.append((
+            "groq",
+            groq_client(groq_key, os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")),
+        ))
+
+    if links:
+        return FallbackClient(links), ClientKind.LIVE
 
     return OfflineHeuristicClient(), ClientKind.OFFLINE

@@ -1,7 +1,7 @@
 {
   "arm": "full",
   "chain_ok": true,
-  "client_kind": "offline",
+  "client_kind": "live",
   "confirmed": 134,
   "degraded": false,
   "detected": 124,
@@ -16,7 +16,7 @@
   "invariant_delta_paise": -18253746,
   "invariant_ok": false,
   "ledger_entries": 286,
-  "llm_calls": 0,
+  "llm_calls": 11,
   "misclassified": 0,
   "network_calls": 0,
   "per_class": {
@@ -43,18 +43,18 @@
   },
   "provider_calls": 11,
   "reason_codes": {
-    "ambiguous_multiple_verified": 1,
     "fee_schedule_unknown": 1,
-    "no_hypothesis_verified": 5
+    "no_hypothesis_verified": 5,
+    "verified": 1
   },
   "records": 500,
   "repairs": {},
   "storage": "in-memory",
   "throughput": {
-    "p50_us": 4,
-    "p99_us": 37,
+    "p50_us": 2,
+    "p99_us": 12,
     "records": 1040,
-    "wall_clock_us": 34848
+    "wall_clock_us": 25560
   },
   "transient_filtered": 1
 }

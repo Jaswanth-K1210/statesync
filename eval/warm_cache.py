@@ -18,15 +18,27 @@ import json
 from datetime import UTC, datetime
 
 from eval.arms import run_arm
+from statesync.classifier.llm_provider import LLMHypothesisProvider
 from statesync.config import CACHE_DIR, SEED
+from statesync.llm.cache import LLMCache
 from statesync.llm.client import ClientKind, resolve_client
 
 MANIFEST = CACHE_DIR / "MANIFEST.json"
 
 
 def main() -> int:
-    _, kind = resolve_client()
-    result = run_arm("full", seed=SEED, n=500, rate=0.25, hard_cases=True)
+    import time
+
+    # Build the client here and hand it to the run. Probing one client and
+    # measuring another reports the chain that never ran — the same bug class
+    # as case 13, where a value was computed upstream and re-derived below.
+    client, kind = resolve_client()
+    provider = LLMHypothesisProvider(cache=LLMCache(), client=client)
+
+    started = time.perf_counter()
+    result = run_arm("full", seed=SEED, n=500, rate=0.25, hard_cases=True,
+                     provider=provider)
+    elapsed_ms = int((time.perf_counter() - started) * 1000)
 
     entries = sorted(p.name for p in CACHE_DIR.glob("*.json") if p.name != "MANIFEST.json")
     MANIFEST.write_text(
@@ -37,6 +49,10 @@ def main() -> int:
             "records": 500,
             "entries": len(entries),
             "provider_calls_cold": result.network_calls,
+            "cold_wall_clock_ms": elapsed_ms,
+            "answered_by": getattr(client, "answered_by", kind),
+            "chain": getattr(client, "names", [kind]),
+            "chain_failures": getattr(client, "failures", []),
             "note": (
                 "Populated by the offline heuristic client, which is NOT a model. "
                 "Cold provider cost is unmeasured until an API key is configured."
