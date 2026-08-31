@@ -155,6 +155,30 @@ describe("packet viewer", () => {
     expect(screen.getByText(/No generated hypothesis verified/)).toBeDefined();
   });
 
+  it("renders a packet with no hypotheses at all", () => {
+    // pay_hc17 escalates BEFORE generation: the fee was unknown, so there was
+    // no residual to explain and no candidates were produced. An empty list is
+    // the correct content, not an empty state to apologise for.
+    render(
+      <PacketView
+        packet={packet({
+          payment_id: "pay_hc17",
+          known_components: [],
+          hypotheses: [],
+          residual_paise: 0,
+          reason_code: "fee_schedule_unknown",
+          suggested_action: "Fee data is unavailable for pay_hc17.",
+          needed_config: "fee_schedule.rates.crypto_voucher",
+        })}
+      />,
+    );
+    expect(screen.queryAllByTestId("hypothesis")).toHaveLength(0);
+    expect(screen.getByTestId("reason-code").textContent).toBe("fee_schedule_unknown");
+    expect(screen.getByText(/None were generated/)).toBeDefined();
+    expect(screen.getByText(/fee_schedule.rates.crypto_voucher/)).toBeDefined();
+    expect(screen.getByTestId("residual").textContent).toBe("₹0.00");
+  });
+
   it("says so when nothing could be priced", () => {
     render(
       <PacketView
@@ -172,13 +196,21 @@ describe("packet viewer", () => {
 });
 
 describe("money", () => {
-  it("renders paise as rupees with two decimals", () => {
-    expect(rupees(1140)).toBe("₹11.40");
-    expect(rupees(400000)).toBe("₹4,000.00");
-    expect(rupees(1)).toBe("₹0.01");
-  });
+  // Lakh-crore grouping, not the western three-digit convention. The previous
+  // assertions all sat below ten thousand, where the two conventions agree —
+  // so they passed under either and tested nothing about grouping.
+  const cases: Array<[number, string]> = [
+    [0, "₹0.00"],
+    [1, "₹0.01"],
+    [100, "₹1.00"],
+    [10580, "₹105.80"],
+    [400000, "₹4,000.00"],
+    [10588000, "₹1,05,880.00"],
+    [1000000000, "₹1,00,00,000.00"],
+    [-10580, "-₹105.80"],
+  ];
 
-  it("handles negatives", () => {
-    expect(rupees(-250000)).toBe("-₹2,500.00");
+  it.each(cases)("renders %i paise as %s", (paise, expected) => {
+    expect(rupees(paise)).toBe(expected);
   });
 });
