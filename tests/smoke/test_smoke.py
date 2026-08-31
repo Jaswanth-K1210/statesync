@@ -289,9 +289,9 @@ def test_s4_the_exception_list_has_reason_codes():
                          exceptions_path=path)
         assert result.exceptions_count > 0
         header = next(
-        ln for ln in path.read_text().splitlines() if not ln.startswith("#")
-    )
-    assert header == ",".join(EXCEPTION_COLUMNS)
+            ln for ln in path.read_text().splitlines() if not ln.startswith("#")
+        )
+        assert header == ",".join(EXCEPTION_COLUMNS)
         assert "no_hypothesis_verified" in path.read_text()
 
 
