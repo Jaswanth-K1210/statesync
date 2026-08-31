@@ -55,8 +55,9 @@ test-chaos:  ## injected failures and degradation paths
 test-ui:  ## component + journey tests for the one screen (jsdom, fast)
 	cd frontend && npm test
 
-test-e2e:  ## the same two journeys in a real browser (needs a browser install)
-	cd frontend && npx playwright install chromium && npx playwright test
+test-e2e:  ## no browser-level suite — see README
+	@echo "test-e2e: no browser suite in this repo. The two ops journeys run"
+	@echo "          at component level via 'make test-ui'. See README."
 
 smoke-frontend:  ## build + boot + load the one screen (<10s, not in make smoke)
 	@bash scripts/smoke_frontend.sh

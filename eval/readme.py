@@ -269,6 +269,17 @@ The last one is the sharpest. `Ledger.verify()` was correct and thoroughly
 tested, and nothing called it — so the audit chain could break and repairs
 would carry on. The guarantee existed as prose for six phases.
 
+## What is not tested here
+
+Browser-level end-to-end tests are **not** in this repo. Playwright could not be
+run in the environment this was built in — the browser fails to spawn under its
+sandbox — and shipping tests nobody has watched pass would contradict the
+standard everything else is held to.
+
+The two ops journeys are covered at component level against the real component
+tree with the network stubbed (`make test-ui`). Layout and real browser
+behaviour are not asserted.
+
 ## Architecture
 
 See `ARCHITECTURE.md` for the decision log: the lease that must not expire in

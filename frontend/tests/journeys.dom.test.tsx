@@ -2,14 +2,15 @@ import { render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "../src/App";
 
-// The same two journeys as tests/e2e/journeys.spec.ts, driven through the real
-// component tree with the network stubbed.
+// The two ops journeys, driven through the real component tree with the
+// network stubbed.
 //
-// The Playwright specs are the real thing and run on a developer machine. They
-// could not be executed in the environment this was built in — the browser
-// binary fails to spawn under its sandbox — so these exist so the journeys are
-// not merely *written*. They exercise filter, selection, fetch wiring and
-// render; what they cannot cover is layout and real browser behaviour.
+// There are no browser-level specs in this repo. Playwright could not be run
+// in the environment this was built in — the browser fails to spawn under its
+// sandbox — and shipping tests nobody has watched pass would contradict the
+// standard the rest of this project is held to. These exercise filter,
+// selection, fetch wiring and render. Layout and browser behaviour are not
+// asserted, and the README says so.
 
 const packets: Record<string, unknown> = {
   pay_hc14: {
