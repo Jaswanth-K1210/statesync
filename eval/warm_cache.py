@@ -58,12 +58,34 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="eval.warm_cache")
     parser.add_argument(
         "--rebuild", action="store_true",
-        help="delete cached responses first and take a true cold measurement",
+        help=(
+            "delete cached responses and re-measure cold. RESHUFFLES every "
+            "model result: temperature is non-zero, so hc13's ambiguity, the "
+            "resolution count and the rejection rate must all be re-verified "
+            "afterwards, and `make readme` re-run"
+        ),
     )
     args = parser.parse_args(argv)
 
     previous = _previous()
     STATS.reset()
+
+    if args.rebuild and previous.get("cold", {}).get("measured_at"):
+        # Rotating a key does NOT require this. The cache is keyed by
+        # sha256(prompt), not by credential, so a new key reads the same
+        # entries. Rebuilding re-rolls every model response at temperature
+        # 0.7, which puts the committed results back in play — including
+        # whether hc13 still comes out ambiguous.
+        print(  # noqa: T201
+            "WARNING: --rebuild discards a cold measurement taken "
+            f"{previous['cold']['measured_at']} and re-rolls every model "
+            "response.\n"
+            "         Afterwards you MUST re-run `make readme` and confirm "
+            "hc13 is still\n"
+            "         ambiguous_multiple_verified. Rotating a key does not "
+            "need this:\n"
+            "         the cache is keyed by prompt hash, not by credential."
+        )
     if args.rebuild:
         for entry in CACHE_DIR.glob("*.json"):
             if entry.name not in {"MANIFEST.json", "OBSERVED_EVENTS.json"}:
