@@ -1,0 +1,91 @@
+{
+  "divergence_key": "2b34ac41dd29d2994c73f0e341bd4836",
+  "hypotheses": [
+    {
+      "arithmetic_shown": "(no components) = 0",
+      "citations": [],
+      "components": [],
+      "label": "H1",
+      "matched_residual": false,
+      "pass_no": 1,
+      "rejection_reason": "components sum to 0 paise, residual is 60 (off by 60)",
+      "residual_paise": 60,
+      "sum_paise": 0,
+      "verdict": "ARITHMETIC_FAILED"
+    },
+    {
+      "arithmetic_shown": "60 = 60",
+      "citations": [
+        {
+          "artifact": "reserve_pay_hc06_01",
+          "resolves": false
+        }
+      ],
+      "components": [
+        {
+          "amount_paise": 60,
+          "cites": "reserve_pay_hc06_01",
+          "name": "reserves",
+          "rate_bps": 0
+        }
+      ],
+      "label": "H2",
+      "matched_residual": true,
+      "pass_no": 2,
+      "rejection_reason": "cited artifact 'reserve_pay_hc06_01' does not exist",
+      "residual_paise": 60,
+      "sum_paise": 60,
+      "verdict": "ARTIFACT_MISSING"
+    },
+    {
+      "arithmetic_shown": "30 + 30 = 60",
+      "citations": [
+        {
+          "artifact": "rounding_pay_hc06_01",
+          "resolves": false
+        },
+        {
+          "artifact": "adjustment_pay_hc06_01",
+          "resolves": false
+        }
+      ],
+      "components": [
+        {
+          "amount_paise": 30,
+          "cites": "rounding_pay_hc06_01",
+          "name": "rounding",
+          "rate_bps": 0
+        },
+        {
+          "amount_paise": 30,
+          "cites": "adjustment_pay_hc06_01",
+          "name": "adjustments",
+          "rate_bps": 0
+        }
+      ],
+      "label": "H3",
+      "matched_residual": true,
+      "pass_no": 2,
+      "rejection_reason": "cited artifact 'rounding_pay_hc06_01' does not exist",
+      "residual_paise": 60,
+      "sum_paise": 60,
+      "verdict": "ARTIFACT_MISSING"
+    }
+  ],
+  "klass": "amount_mismatch",
+  "known_components": [
+    {
+      "amount_paise": 9440,
+      "name": "fee_and_tax",
+      "source": "payment.fee_paise + payment.tax_paise"
+    }
+  ],
+  "order_id": "order_hc06",
+  "order_total_paise": 400000,
+  "passes_used": 2,
+  "payment_id": "pay_hc06",
+  "reason_code": "no_hypothesis_verified",
+  "residual_paise": 60,
+  "settled_paise": 390500,
+  "suggested_action": "No generated hypothesis verified for the 60 paise residual on pay_hc06. All candidates are attached with their arithmetic and the reason each was rejected. Check the settlement report for the relevant cycle."
+}

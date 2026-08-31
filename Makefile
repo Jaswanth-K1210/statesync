@@ -10,8 +10,8 @@ COMPOSE := docker compose
 
 .DEFAULT_GOAL := help
 .PHONY: help setup up down test test-unit test-prop test-int test-chaos test-e2e \
-        smoke smoke-frontend verify determinism eval eval-arm demo lint clean \
-        warm-cache readme reproduce stop stop-hard
+        smoke smoke-frontend verify determinism eval eval-arm demo lint clean test-ui \
+        warm-cache readme reproduce stop stop-hard ui
 
 help:  ## show this help
 	@grep -hE '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) | sort | \
@@ -52,8 +52,19 @@ test-int:  ## real Postgres + Redis, full pipeline (<2min)
 test-chaos:  ## injected failures and degradation paths
 	$(PYTEST) tests/chaos -q
 
-test-e2e:  ## Playwright ops-person journeys (Phase 6)
-	@echo "test-e2e: no frontend until Phase 6."
+test-ui:  ## component + journey tests for the one screen (jsdom, fast)
+	cd frontend && npm test
+
+test-e2e:  ## the same two journeys in a real browser (needs a browser install)
+	cd frontend && npx playwright install chromium && npx playwright test
+
+smoke-frontend:  ## build + boot + load the one screen (<10s, not in make smoke)
+	@bash scripts/smoke_frontend.sh
+
+ui:  ## run the packets API and the screen for local viewing
+	@echo "API  http://127.0.0.1:8787/api/divergences"
+	@echo "UI   http://127.0.0.1:5173"
+	@($(PY) -m statesync.api.server &) && cd frontend && npm run dev
 
 smoke: up  ## does it boot and do one real thing? (<30s, always)
 	@start=$$(date +%s); $(PYTEST) tests/smoke -q; \

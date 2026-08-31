@@ -1,0 +1,15 @@
+{
+  "divergence_key": "bfd2a38a3b0f096783028ce8d024059f",
+  "hypotheses": [],
+  "klass": "amount_mismatch",
+  "known_components": [],
+  "needed_config": "fee_schedule.rates.crypto_voucher (effective on or before 2026-10-01)",
+  "order_id": "order_hc17",
+  "order_total_paise": 275000,
+  "passes_used": 0,
+  "payment_id": "pay_hc17",
+  "reason_code": "fee_schedule_unknown",
+  "residual_paise": 0,
+  "settled_paise": 275000,
+  "suggested_action": "Fee data is unavailable for pay_hc17, leaving 0 paise unattributed. Add the instrument to the fee schedule; no rate has been assumed."
+}

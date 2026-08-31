@@ -129,3 +129,129 @@ def test_the_stored_rate_survives_canonical_serialisation(run):
 
     result, _ = run
     canonical(result.as_event())
+
+
+# ── the API is the newest surface, and the likeliest place for instance 8 ───
+
+def test_every_csv_row_has_a_packet(run):
+    """A row the API cannot serve means the two artifacts disagree about how
+    many escalations exist."""
+    from statesync.api.server import load_packet
+
+    _, rows = run
+    for row in rows:
+        assert load_packet(row["payment_id"]) is not None, row["payment_id"]
+
+
+def test_the_committed_csv_and_the_served_packets_agree():
+    """One exception list, from the shipped configuration.
+
+    The CSV was written by arm 2 while the API served arm 3, so the two
+    disagreed about whether hc09 was resolved. Both now come from SERVED_ARM.
+    """
+    import csv as _csv
+
+    from statesync.api.server import load_packet
+    from statesync.config import PROJECT_ROOT
+
+    path = PROJECT_ROOT / "exceptions.csv"
+    committed = list(_csv.DictReader(
+        line for line in path.open() if not line.startswith("#")
+    ))
+    for row in committed:
+        packet = load_packet(row["payment_id"])
+        assert packet is not None, row["payment_id"]
+        assert packet["reason_code"] == row["reason_code"], row["payment_id"]
+
+
+def test_the_csv_names_the_arm_it_came_from():
+    from eval.arms import SERVED_ARM
+
+    from statesync.config import PROJECT_ROOT
+
+    summary = (PROJECT_ROOT / "exceptions.csv").read_text().splitlines()[0]
+    assert f"arm={SERVED_ARM}" in summary
+
+
+def test_the_api_list_and_the_csv_agree_on_the_escalation_count(run):
+    from statesync.api.server import list_divergences
+
+    _, rows = run
+    assert len(list_divergences()) == len(rows)
+
+
+def test_the_api_never_recomputes_a_sum(run):
+    """Each hypothesis's arithmetic string is stored, and it must match the
+    stored sum — if the UI ever renders one and computes the other they will
+    disagree, which is exactly instance eight."""
+    from statesync.api.server import list_divergences, load_packet
+
+    for summary in list_divergences():
+        packet = load_packet(summary["payment_id"])
+        for hypothesis in packet["hypotheses"]:
+            assert hypothesis["arithmetic_shown"].endswith(str(hypothesis["sum_paise"]))
+            assert hypothesis["matched_residual"] == (
+                hypothesis["sum_paise"] == packet["residual_paise"]
+            )
+
+
+def test_the_api_serves_the_same_arm_the_readme_quotes():
+    """Packets were written by every arm into one directory, last-write-wins,
+    and the harness runs arm 2's idempotency proof after arm 3 — so the files
+    showed arm 2 while the README quoted arm 3. hc09 had zero hypotheses on
+    disk and one resolution in the table.
+    """
+    import json
+
+    from eval.arms import SERVED_ARM
+
+    from statesync.api.server import list_divergences, load_packet
+    from statesync.config import PROJECT_ROOT
+
+    arm_result = json.loads(
+        (PROJECT_ROOT / "eval" / "results" / f"arm_{SERVED_ARM}.json").read_text()
+    )
+
+    served = {row["payment_id"]: load_packet(row["payment_id"])
+              for row in list_divergences()}
+    tally: dict[str, int] = {}
+    for packet in served.values():
+        tally[packet["reason_code"]] = tally.get(packet["reason_code"], 0) + 1
+
+    assert tally == arm_result["reason_codes"], (
+        f"the served packets disagree with arm_{SERVED_ARM}.json"
+    )
+
+
+def test_the_served_packets_carry_the_resolutions_the_readme_claims():
+    from statesync.api.server import list_divergences, load_packet
+
+    resolved = [
+        row["payment_id"] for row in list_divergences()
+        if load_packet(row["payment_id"])["reason_code"] == "verified"
+    ]
+    assert len(resolved) == 2, "the README's two resolutions are not in the packets"
+
+
+def test_case_13_is_ambiguous_in_the_served_packets():
+    from statesync.api.server import load_packet
+
+    packet = load_packet("pay_hc13")
+    assert packet["reason_code"] == "ambiguous_multiple_verified"
+    verified = [h for h in packet["hypotheses"] if h["verdict"] == "VERIFIED"]
+    assert len(verified) == 2
+    breakdowns = [sorted(c["name"] for c in h["components"]) for h in verified]
+    assert breakdowns[0] != breakdowns[1]
+
+
+def test_running_the_suite_does_not_mutate_the_committed_packets():
+    """pytest must not change the repo. It did: unqualified run_arm calls wrote
+    into eval/results/packets/, so the API tests failed against files their own
+    suite had just overwritten."""
+    import os
+
+    from eval.arms import PACKETS_DIR
+
+    override = os.getenv("STATESYNC_PACKETS_DIR")
+    assert override, "the session must redirect packet writes"
+    assert not str(PACKETS_DIR).startswith(override)

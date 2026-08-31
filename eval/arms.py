@@ -12,6 +12,8 @@ it first. The propose-verify layer is judged on Phase 4's hard cases.
 
 from __future__ import annotations
 
+import json
+import os
 from dataclasses import dataclass, field
 from datetime import timedelta
 from pathlib import Path
@@ -28,7 +30,7 @@ from statesync.classifier.provider import (
     UnionHypothesisProvider,
 )
 from statesync.classifier.verifier import ArtifactIndex, Component
-from statesync.config import BASE_TIME, REDIS_URL, SEED, STALENESS_WINDOW
+from statesync.config import BASE_TIME, PROJECT_ROOT, REDIS_URL, SEED, STALENESS_WINDOW
 from statesync.executor.runner import RepairRunner
 from statesync.executor.store import InMemoryRepairStore
 from statesync.generator.synthetic import Batch, generate_batch
@@ -50,6 +52,25 @@ from statesync.reporting.exceptions_csv import write_exceptions_csv
 __all__ = ["ARMS", "ArmResult", "make_repair_runner", "run_arm"]
 
 ARMS: tuple[str, ...] = ("none", "rules", "full")
+
+PACKETS_DIR = PROJECT_ROOT / "eval" / "results" / "packets"
+"""Escalation packets, one JSON per escalated payment, **namespaced by arm**.
+
+Built in memory and discarded until Phase 6 — only the reason code reached
+`exceptions.csv`, so nothing could show a reviewer the arithmetic behind a
+refusal.
+
+Namespacing is not tidiness. Writing every arm into one directory makes it
+last-write-wins, and the harness runs the three-pass idempotency proof (arm 2)
+after arm 3 — so the packets on disk showed arm 2's view while the README
+quoted arm 3's. hc09 had zero hypotheses in the file and one resolution in the
+table. That is the seam pattern in `docs/seam_bugs.json` arriving in the newest
+surface: one artifact re-deriving what another already decided.
+"""
+
+SERVED_ARM = "full"
+"""The arm the API and the UI show. The same arm the README's headline quotes,
+named once so the two cannot drift apart."""
 
 # Reconciliation happens well after the generated window, so nothing is inside
 # the staleness window for reasons of the clock rather than reasons of state.
@@ -183,6 +204,7 @@ def run_arm(
     runner: RepairRunner | None = None,
     hard_cases: bool = False,
     provider: HypothesisProvider | None = None,
+    packets_dir: Path | None = None,
 ) -> ArmResult:
     """Run one arm over a freshly generated, freshly injected batch."""
     if arm not in ARMS:
@@ -284,12 +306,18 @@ def run_arm(
                         # Priced nothing, so nothing can be verified. Escalate
                         # with the config that would resolve it.
                         reasons[key] = ReasonCode.FEE_SCHEDULE_UNKNOWN
+                        # A packet is still written, with no hypotheses. Without
+                        # it the CSV would carry a row the API could not serve,
+                        # and the two artifacts would disagree about how many
+                        # escalations exist.
+                        _write_unpriceable_packet(divergence, packets_dir, arm)
                     else:
                         packet = _escalate(divergence, provider, artifacts, ledger,
                                            result.reason_code)
                         reasons[key] = packet.reason_code if packet else result.reason_code
                         if packet is not None:
                             packets.append(packet)
+                            _write_packet(packet, artifacts, packets_dir, arm)
 
         # The late webhook lands between passes, so pass 2 sees a batch that
         # has moved on — as a real one would.
@@ -471,3 +499,65 @@ def _escalate(
         base_paise=divergence.amount_paise,
     )
     return packet
+
+
+def _packet_target(arm: str, packets_dir: Path | None) -> Path:
+    """Where packets get written.
+
+    `STATESYNC_PACKETS_DIR` redirects writes away from the committed location.
+    The test suite sets it: running pytest was overwriting `eval/results/
+    packets/` with test data, so the repo's committed artifacts changed as a
+    side effect of running the tests — and the API tests then failed against
+    files their own suite had just corrupted.
+    """
+    if packets_dir is None:
+        override = os.getenv("STATESYNC_PACKETS_DIR")
+        packets_dir = Path(override) if override else PACKETS_DIR
+    target = packets_dir / arm
+    target.mkdir(parents=True, exist_ok=True)
+    return target
+
+
+def _write_unpriceable_packet(
+    divergence: Divergence, packets_dir: Path | None, arm: str
+) -> None:
+    """A packet for a divergence nothing could price.
+
+    No hypotheses, because none were generated: the fee was unknown, so there
+    was no residual to explain. The packet says exactly that, and names the
+    config that would resolve it.
+    """
+    from statesync.classifier.escalation import suggested_action
+
+    target = _packet_target(arm, packets_dir)
+    payload: dict[str, Any] = {
+        "payment_id": divergence.payment_id or "",
+        "order_id": divergence.order_id or "",
+        "divergence_key": divergence.deterministic_key(),
+        "klass": divergence.klass.value,
+        "order_total_paise": divergence.amount_paise,
+        "settled_paise": divergence.amount_paise,
+        "known_components": [],
+        "residual_paise": 0,
+        "hypotheses": [],
+        "reason_code": ReasonCode.FEE_SCHEDULE_UNKNOWN.value,
+        "suggested_action": suggested_action(
+            ReasonCode.FEE_SCHEDULE_UNKNOWN, 0, divergence.payment_id or ""
+        ),
+        "passes_used": 0,
+        "needed_config": divergence.detail.get("needed_config", ""),
+    }
+    (target / f"{payload['payment_id']}.json").write_text(
+        json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+
+
+def _write_packet(
+    packet: Any, artifacts: Any, packets_dir: Path | None, arm: str
+) -> None:
+    """Persist one escalation packet exactly as it was decided, under its arm."""
+    target = _packet_target(arm, packets_dir)
+    payload = packet.as_packet(artifacts)
+    (target / f"{payload['payment_id']}.json").write_text(
+        json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )

@@ -106,6 +106,29 @@ class EscalationPacket:
     def rejected(self) -> list[Hypothesis]:
         return [h for h in self.hypotheses if h.verdict != Verdict.VERIFIED]
 
+    def as_packet(self, artifacts: Any) -> dict[str, Any]:
+        """The stored form. Read by the API and rendered by the UI verbatim."""
+        return {
+            "payment_id": self.divergence.payment_id or "",
+            "order_id": self.divergence.order_id or "",
+            "divergence_key": self.divergence.deterministic_key(),
+            "klass": self.divergence.klass.value,
+            "order_total_paise": self.divergence.amount_paise,
+            "settled_paise": self.divergence.amount_paise - self.residual_paise - sum(
+                c.amount_paise for c in self.known_components
+            ),
+            "known_components": [
+                {"name": c.name, "amount_paise": c.amount_paise,
+                 "source": self.known_components_source}
+                for c in self.known_components
+            ],
+            "residual_paise": self.residual_paise,
+            "hypotheses": [h.as_packet_field(artifacts) for h in self.hypotheses],
+            "reason_code": self.reason_code.value,
+            "suggested_action": self.suggested_action,
+            "passes_used": self.passes_used,
+        }
+
     def as_event(self) -> dict[str, Any]:
         return {
             "divergence_key": self.divergence.deterministic_key(),
@@ -165,7 +188,7 @@ def build_packet(
             hypotheses.append(
                 verify(proposal, residual_paise=residual_paise,
                        artifacts=request.artifacts, label=f"H{len(hypotheses) + 1}",
-                       base_paise=base_paise)
+                       base_paise=base_paise, pass_no=passes_used)
             )
             accepted += 1
 

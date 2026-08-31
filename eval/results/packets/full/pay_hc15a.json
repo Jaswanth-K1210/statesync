@@ -1,0 +1,57 @@
+{
+  "divergence_key": "d10ab7d405eedf5e9730100ebce190b3",
+  "hypotheses": [
+    {
+      "arithmetic_shown": "(no components) = 0",
+      "citations": [],
+      "components": [],
+      "label": "H1",
+      "matched_residual": false,
+      "pass_no": 1,
+      "rejection_reason": "components sum to 0 paise, residual is 1 (off by 1)",
+      "residual_paise": 1,
+      "sum_paise": 0,
+      "verdict": "ARITHMETIC_FAILED"
+    },
+    {
+      "arithmetic_shown": "1 = 1",
+      "citations": [
+        {
+          "artifact": "pay_hc15a",
+          "resolves": true
+        }
+      ],
+      "components": [
+        {
+          "amount_paise": 1,
+          "cites": "pay_hc15a",
+          "name": "rounding_adjustment",
+          "rate_bps": 0
+        }
+      ],
+      "label": "H2",
+      "matched_residual": true,
+      "pass_no": 2,
+      "rejection_reason": "",
+      "residual_paise": 1,
+      "sum_paise": 1,
+      "verdict": "VERIFIED"
+    }
+  ],
+  "klass": "amount_mismatch",
+  "known_components": [
+    {
+      "amount_paise": 2950,
+      "name": "fee_and_tax",
+      "source": "payment.fee_paise + payment.tax_paise"
+    }
+  ],
+  "order_id": "order_hc15a",
+  "order_total_paise": 125003,
+  "passes_used": 2,
+  "payment_id": "pay_hc15a",
+  "reason_code": "verified",
+  "residual_paise": 1,
+  "settled_paise": 122052,
+  "suggested_action": "Residual of 1 paise on pay_hc15a is fully attributed by one verified hypothesis. No action required."
+}

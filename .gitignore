@@ -13,3 +13,7 @@ eval/results/tmp/
 .env.*
 !.env.example
 *.pem
+frontend/node_modules/
+frontend/dist/
+frontend/test-results/
+frontend/playwright-report/

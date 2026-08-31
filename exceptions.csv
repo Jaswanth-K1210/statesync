@@ -1,9 +1,9 @@
-# 7 exceptions of 124 divergences detected (arm=rules, seed=20260905, with hard cases)
+# 7 exceptions of 124 divergences detected (arm=full, seed=20260905, with hard cases)
 divergence_key,class,reason_code,payment_id,order_id,amount_paise,observed_at,detail
 03a0160ff28128542074456d0e92c5d6,amount_mismatch,no_hypothesis_verified,pay_hc15b,order_hc15b,125003,2026-10-01T00:00:00Z,fee_source=payment_object;instrument=card_domestic;known_paise=2950;residual_paise=1
 2b34ac41dd29d2994c73f0e341bd4836,amount_mismatch,no_hypothesis_verified,pay_hc06,order_hc06,400000,2026-10-01T00:00:00Z,fee_source=payment_object;instrument=card_domestic;known_paise=9440;residual_paise=60
 66aff2cfb2a29b74874bc1bfbc773e08,amount_mismatch,no_hypothesis_verified,pay_hc14,order_hc14,400000,2026-10-01T00:00:00Z,fee_source=payment_object;instrument=card_domestic;known_paise=9440;residual_paise=1140
 bfd2a38a3b0f096783028ce8d024059f,amount_mismatch,fee_schedule_unknown,pay_hc17,order_hc17,275000,2026-10-01T00:00:00Z,fee_source=unknown;instrument=crypto_voucher;known_paise=0;needed_config=fee_schedule.rates.crypto_voucher (effective on or before 2026-10-01);residual_paise=0
-d10ab7d405eedf5e9730100ebce190b3,amount_mismatch,no_hypothesis_verified,pay_hc15a,order_hc15a,125003,2026-10-01T00:00:00Z,fee_source=payment_object;instrument=upi;known_paise=2950;residual_paise=1
-e87954317816a4af2af076c40b3ac730,amount_mismatch,no_hypothesis_verified,pay_hc09,order_hc09,500000,2026-10-01T00:00:00Z,fee_source=payment_object;instrument=card_domestic;known_paise=11800;residual_paise=50000
+d10ab7d405eedf5e9730100ebce190b3,amount_mismatch,verified,pay_hc15a,order_hc15a,125003,2026-10-01T00:00:00Z,fee_source=payment_object;instrument=upi;known_paise=2950;residual_paise=1
+e87954317816a4af2af076c40b3ac730,amount_mismatch,verified,pay_hc09,order_hc09,500000,2026-10-01T00:00:00Z,fee_source=payment_object;instrument=card_domestic;known_paise=11800;residual_paise=50000
 efc86b10b6c2677be2c08aa8ac8d135b,amount_mismatch,ambiguous_multiple_verified,pay_hc13,order_hc13,400000,2026-10-01T00:00:00Z,fee_source=payment_object;instrument=card_domestic;known_paise=9440;residual_paise=1140

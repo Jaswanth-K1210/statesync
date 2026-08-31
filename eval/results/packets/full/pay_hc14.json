@@ -1,0 +1,243 @@
+{
+  "divergence_key": "66aff2cfb2a29b74874bc1bfbc773e08",
+  "hypotheses": [
+    {
+      "arithmetic_shown": "914 + 165 = 1079",
+      "citations": [
+        {
+          "artifact": "stl_hard",
+          "resolves": true
+        },
+        {
+          "artifact": "stl_hard",
+          "resolves": true
+        }
+      ],
+      "components": [
+        {
+          "amount_paise": 914,
+          "cites": "stl_hard",
+          "name": "instant_settlement",
+          "rate_bps": 30
+        },
+        {
+          "amount_paise": 165,
+          "cites": "stl_hard",
+          "name": "gst",
+          "rate_bps": 1800
+        }
+      ],
+      "label": "H1",
+      "matched_residual": false,
+      "pass_no": 1,
+      "rejection_reason": "components sum to 1079 paise, residual is 1140 (off by 61)",
+      "residual_paise": 1140,
+      "sum_paise": 1079,
+      "verdict": "ARITHMETIC_FAILED"
+    },
+    {
+      "arithmetic_shown": "966 + 174 = 1140",
+      "citations": [
+        {
+          "artifact": "rfnd_ghost",
+          "resolves": false
+        },
+        {
+          "artifact": "pay_hc14",
+          "resolves": true
+        }
+      ],
+      "components": [
+        {
+          "amount_paise": 966,
+          "cites": "rfnd_ghost",
+          "name": "refund",
+          "rate_bps": 0
+        },
+        {
+          "amount_paise": 174,
+          "cites": "pay_hc14",
+          "name": "mdr",
+          "rate_bps": 200
+        }
+      ],
+      "label": "H2",
+      "matched_residual": true,
+      "pass_no": 1,
+      "rejection_reason": "cited artifact 'rfnd_ghost' does not exist",
+      "residual_paise": 1140,
+      "sum_paise": 1140,
+      "verdict": "ARTIFACT_MISSING"
+    },
+    {
+      "arithmetic_shown": "1140 = 1140",
+      "citations": [
+        {
+          "artifact": "pay_hc14",
+          "resolves": true
+        }
+      ],
+      "components": [
+        {
+          "amount_paise": 1140,
+          "cites": "pay_hc14",
+          "name": "mdr",
+          "rate_bps": 1250
+        }
+      ],
+      "label": "H3",
+      "matched_residual": true,
+      "pass_no": 1,
+      "rejection_reason": "component 'mdr' claims 12.5%, permitted range is 0.0%-4.0%",
+      "residual_paise": 1140,
+      "sum_paise": 1140,
+      "verdict": "RANGE_VIOLATION"
+    },
+    {
+      "arithmetic_shown": "1079 = 1079",
+      "citations": [
+        {
+          "artifact": "pay_hc14",
+          "resolves": true
+        }
+      ],
+      "components": [
+        {
+          "amount_paise": 1079,
+          "cites": "pay_hc14",
+          "name": "rounding",
+          "rate_bps": 0
+        }
+      ],
+      "label": "H4",
+      "matched_residual": false,
+      "pass_no": 1,
+      "rejection_reason": "components sum to 1079 paise, residual is 1140 (off by 61)",
+      "residual_paise": 1140,
+      "sum_paise": 1079,
+      "verdict": "ARITHMETIC_FAILED"
+    },
+    {
+      "arithmetic_shown": "1201 = 1201",
+      "citations": [
+        {
+          "artifact": "pay_hc14",
+          "resolves": true
+        }
+      ],
+      "components": [
+        {
+          "amount_paise": 1201,
+          "cites": "pay_hc14",
+          "name": "adjustment",
+          "rate_bps": 0
+        }
+      ],
+      "label": "H5",
+      "matched_residual": false,
+      "pass_no": 1,
+      "rejection_reason": "components sum to 1201 paise, residual is 1140 (off by 61)",
+      "residual_paise": 1140,
+      "sum_paise": 1201,
+      "verdict": "ARITHMETIC_FAILED"
+    },
+    {
+      "arithmetic_shown": "967 + 173 = 1140",
+      "citations": [
+        {
+          "artifact": "pay_hc14",
+          "resolves": true
+        },
+        {
+          "artifact": "pay_hc14",
+          "resolves": true
+        }
+      ],
+      "components": [
+        {
+          "amount_paise": 967,
+          "cites": "pay_hc14",
+          "name": "mdr",
+          "rate_bps": 200
+        },
+        {
+          "amount_paise": 173,
+          "cites": "pay_hc14",
+          "name": "gst",
+          "rate_bps": 1800
+        }
+      ],
+      "label": "H6",
+      "matched_residual": true,
+      "pass_no": 2,
+      "rejection_reason": "component 'mdr' claims 2.00% of 400000 paise, which is 8000 paise, but declares 967",
+      "residual_paise": 1140,
+      "sum_paise": 1140,
+      "verdict": "RATE_INCONSISTENT"
+    },
+    {
+      "arithmetic_shown": "1139 = 1139",
+      "citations": [
+        {
+          "artifact": "pay_hc14",
+          "resolves": true
+        }
+      ],
+      "components": [
+        {
+          "amount_paise": 1139,
+          "cites": "pay_hc14",
+          "name": "rounding",
+          "rate_bps": 0
+        }
+      ],
+      "label": "H7",
+      "matched_residual": false,
+      "pass_no": 2,
+      "rejection_reason": "components sum to 1139 paise, residual is 1140 (off by 1)",
+      "residual_paise": 1140,
+      "sum_paise": 1139,
+      "verdict": "ARITHMETIC_FAILED"
+    },
+    {
+      "arithmetic_shown": "1140 = 1140",
+      "citations": [
+        {
+          "artifact": "rfnd_unverified",
+          "resolves": false
+        }
+      ],
+      "components": [
+        {
+          "amount_paise": 1140,
+          "cites": "rfnd_unverified",
+          "name": "refund",
+          "rate_bps": 0
+        }
+      ],
+      "label": "H8",
+      "matched_residual": true,
+      "pass_no": 2,
+      "rejection_reason": "cited artifact 'rfnd_unverified' does not exist",
+      "residual_paise": 1140,
+      "sum_paise": 1140,
+      "verdict": "ARTIFACT_MISSING"
+    }
+  ],
+  "klass": "amount_mismatch",
+  "known_components": [
+    {
+      "amount_paise": 9440,
+      "name": "fee_and_tax",
+      "source": "payment.fee_paise + payment.tax_paise"
+    }
+  ],
+  "order_id": "order_hc14",
+  "order_total_paise": 400000,
+  "passes_used": 2,
+  "payment_id": "pay_hc14",
+  "reason_code": "no_hypothesis_verified",
+  "residual_paise": 1140,
+  "settled_paise": 389420,
+  "suggested_action": "No generated hypothesis verified for the 1140 paise residual on pay_hc14. All candidates are attached with their arithmetic and the reason each was rejected. Check the settlement report for the relevant cycle."
+}

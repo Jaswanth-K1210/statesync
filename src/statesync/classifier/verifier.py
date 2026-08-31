@@ -87,6 +87,9 @@ class Hypothesis(BaseModel):
     citations: list[str]
     verdict: Verdict
     rejection_reason: str = ""
+    pass_no: int = 1
+    """Which generation pass produced this candidate. Stored so a reader can
+    see whether the retry did any work, rather than inferring it."""
 
     @property
     def arithmetic_shown(self) -> str:
@@ -96,6 +99,32 @@ class Hypothesis(BaseModel):
             return f"(no components) = {self.sum_paise}"
         terms = " + ".join(str(c.amount_paise) for c in self.components)
         return f"{terms} = {self.sum_paise}"
+
+    def as_packet_field(self, artifacts: ArtifactIndex) -> dict[str, Any]:
+        """The stored form the API and the UI render verbatim.
+
+        Every value here is what the verifier decided. Nothing downstream may
+        recompute a sum, a match, or a verdict — that is instance eight of the
+        pattern in docs/seam_bugs.json.
+        """
+        return {
+            "label": self.label,
+            "pass_no": self.pass_no,
+            "components": [
+                {"name": c.name, "amount_paise": c.amount_paise,
+                 "cites": c.cites or "", "rate_bps": c.rate_bps or 0}
+                for c in self.components
+            ],
+            "sum_paise": self.sum_paise,
+            "residual_paise": self.residual_paise,
+            "matched_residual": self.matched_residual,
+            "arithmetic_shown": self.arithmetic_shown,
+            "citations": [
+                {"artifact": c, "resolves": c in artifacts} for c in self.citations
+            ],
+            "verdict": self.verdict.value,
+            "rejection_reason": self.rejection_reason,
+        }
 
     def as_event(self) -> dict[str, Any]:
         return {
@@ -133,6 +162,7 @@ def verify(
     artifacts: ArtifactIndex,
     label: str = "H1",
     base_paise: int | None = None,
+    pass_no: int = 1,
 ) -> Hypothesis:
     """Accept or reject one proposal. Deterministic, total, no I/O.
 
@@ -157,6 +187,7 @@ def verify(
             label=label, components=list(proposal.components), sum_paise=total,
             residual_paise=residual_paise, matched_residual=matched,
             citations=citations, verdict=verdict, rejection_reason=reason,
+            pass_no=pass_no,
         )
 
     if not matched:

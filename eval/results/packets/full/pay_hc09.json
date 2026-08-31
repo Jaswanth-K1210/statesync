@@ -1,0 +1,45 @@
+{
+  "divergence_key": "e87954317816a4af2af076c40b3ac730",
+  "hypotheses": [
+    {
+      "arithmetic_shown": "50000 = 50000",
+      "citations": [
+        {
+          "artifact": "pay_hc09",
+          "resolves": true
+        }
+      ],
+      "components": [
+        {
+          "amount_paise": 50000,
+          "cites": "pay_hc09",
+          "name": "adjustments",
+          "rate_bps": 0
+        }
+      ],
+      "label": "H1",
+      "matched_residual": true,
+      "pass_no": 1,
+      "rejection_reason": "",
+      "residual_paise": 50000,
+      "sum_paise": 50000,
+      "verdict": "VERIFIED"
+    }
+  ],
+  "klass": "amount_mismatch",
+  "known_components": [
+    {
+      "amount_paise": 11800,
+      "name": "fee_and_tax",
+      "source": "payment.fee_paise + payment.tax_paise"
+    }
+  ],
+  "order_id": "order_hc09",
+  "order_total_paise": 500000,
+  "passes_used": 1,
+  "payment_id": "pay_hc09",
+  "reason_code": "verified",
+  "residual_paise": 50000,
+  "settled_paise": 438200,
+  "suggested_action": "Residual of 50000 paise on pay_hc09 is fully attributed by one verified hypothesis. No action required."
+}

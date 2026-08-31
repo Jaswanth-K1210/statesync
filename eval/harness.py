@@ -15,7 +15,7 @@ import argparse
 import json
 from pathlib import Path
 
-from eval.arms import ArmResult, make_repair_runner, run_arm
+from eval.arms import SERVED_ARM, ArmResult, make_repair_runner, run_arm
 from statesync.classifier.settlement import settlement_gap_report
 from statesync.config import PROJECT_ROOT, SEED
 
@@ -244,9 +244,15 @@ def main(argv: list[str] | None = None) -> int:
     args.results_dir.mkdir(parents=True, exist_ok=True)
 
     results = [
+        # The committed exception list is the SHIPPED configuration, so it
+        # agrees with the packets the API serves and with the headline the
+        # README quotes. Writing it from arm 2 while serving arm 3 made the
+        # two artifacts disagree about whether hc09 was resolved.
         run_arm(arm, seed=args.seed, n=args.n, rate=args.rate, repair=(arm == "rules"),
                 hard_cases=True,
-                exceptions_path=PROJECT_ROOT / "exceptions.csv" if arm == "rules" else None)
+                exceptions_path=(
+                    PROJECT_ROOT / "exceptions.csv" if arm == SERVED_ARM else None
+                ))
         for arm in arms
     ]
 

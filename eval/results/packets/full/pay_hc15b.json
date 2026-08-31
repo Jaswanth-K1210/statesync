@@ -1,0 +1,20 @@
+{
+  "divergence_key": "03a0160ff28128542074456d0e92c5d6",
+  "hypotheses": [],
+  "klass": "amount_mismatch",
+  "known_components": [
+    {
+      "amount_paise": 2950,
+      "name": "fee_and_tax",
+      "source": "payment.fee_paise + payment.tax_paise"
+    }
+  ],
+  "order_id": "order_hc15b",
+  "order_total_paise": 125003,
+  "passes_used": 2,
+  "payment_id": "pay_hc15b",
+  "reason_code": "no_hypothesis_verified",
+  "residual_paise": 1,
+  "settled_paise": 122052,
+  "suggested_action": "No generated hypothesis verified for the 1 paise residual on pay_hc15b. All candidates are attached with their arithmetic and the reason each was rejected. Check the settlement report for the relevant cycle."
+}
