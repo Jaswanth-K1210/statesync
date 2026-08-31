@@ -15,7 +15,7 @@ escalate, report.** One loop. Six kinds of disagreement.
 ## Reproduce every number below
 
 ```
-make setup && make verify     # lint, types, 634 tests
+make setup && make verify     # lint, types, 637 tests
 make eval                     # regenerates every figure in this file
 make readme                   # regenerates this file from that output
 ```
@@ -29,11 +29,16 @@ if this file drifts from what regeneration produces.
 Seed `20260905` · 500 synthetic records · 124 injected divergences ·
 15 hard cases.
 
+**Every figure below is from the served arm, `full`** — rules plus the
+propose-verify layer. Per-arm escalation packets are in
+`eval/results/packets/<arm>/`, and `exceptions.csv` is the served arm's list, so
+a reader comparing the two never has to infer which run produced which file.
+
 | arm | match rate | detected | missed | false positives | rec/s | LLM calls |
 |---|---|---|---|---|---|---|
-| 1 · no detection | 0.0% | 0 | 124 | 0 | 99,030 | 0 |
-| 2 · rules only | 100.0% | 124 | 0 | 0 | 2,442 | 0 |
-| 3 · rules + model | 100.0% | 124 | 0 | 0 | 11,952 | 10 |
+| 1 · no detection | 0.0% | 0 | 124 | 0 | 119,962 | 0 |
+| 2 · rules only | 100.0% | 124 | 0 | 0 | 1,798 | 0 |
+| 3 · rules + model | 100.0% | 124 | 0 | 0 | 11,471 | 10 |
 
 **100.0% is the expected floor, not an achievement.** Four of the six
 divergence classes are exact set operations; if a set difference failed to find
@@ -157,7 +162,7 @@ settlement engine: it detects gaps and escalates. **Not fully autonomous** —
 anything outside the confidence, value or blast-radius bounds goes to a human
 by design rather than by limitation.
 
-## What went wrong, 7 times
+## What went wrong, 8 times
 
 A value computed correctly in one place, then re-derived, misrouted, or ignored somewhere else. Every component test passed. The failure was always between correct components.
 
@@ -170,6 +175,7 @@ A value computed correctly in one place, then re-derived, misrouted, or ignored 
 | provider latency | Retry backoff was measured inside the timed call, so sleep was reported as generation cost — a measurement taken at the wrong boundary. |
 | rejection-rate prose | A sentence said 'two times in three' beside a computed 75%. The figure was restated by hand and drifted. |
 | Ledger.verify() | Correct, thoroughly tested, and called by nothing. A tampered chain would have been detected and then ignored while repairs kept writing. |
+| the test suite and eval/results/packets/ | Unqualified run_arm calls wrote into the committed packets directory, so running pytest edited the artifacts it then asserted against. The most serious instance: the evidence was being changed by the thing that checks it, and the reproduction claim rests on those artifacts. |
 
 Every one of these passed its own component tests. The chain verified, the
 packet was built, the provider was constructed, the latency was timed — each
@@ -181,6 +187,17 @@ correctness within one, are what caught them:
 The last one is the sharpest. `Ledger.verify()` was correct and thoroughly
 tested, and nothing called it — so the audit chain could break and repairs
 would carry on. The guarantee existed as prose for six phases.
+
+## What is not tested here
+
+Browser-level end-to-end tests are **not** in this repo. Playwright could not be
+run in the environment this was built in — the browser fails to spawn under its
+sandbox — and shipping tests nobody has watched pass would contradict the
+standard everything else is held to.
+
+The two ops journeys are covered at component level against the real component
+tree with the network stubbed (`make test-ui`). Layout and real browser
+behaviour are not asserted.
 
 ## Architecture
 

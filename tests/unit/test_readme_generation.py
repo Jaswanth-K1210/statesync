@@ -195,3 +195,16 @@ def test_every_seam_bug_appears_in_the_readme(rendered):
 
 def test_the_seam_section_names_what_catches_them(rendered):
     assert "test_reporting_consistency" in rendered
+
+
+def test_the_readme_names_the_arm_it_quotes(rendered):
+    """The packets on disk once showed arm 2 while the README quoted arm 3.
+    A reader opening eval/results/ must not have to infer which is which."""
+    from eval.arms import SERVED_ARM
+
+    assert SERVED_ARM in rendered
+    assert "served arm" in rendered.lower()
+
+
+def test_the_readme_points_at_the_per_arm_packet_location(rendered):
+    assert "eval/results/packets/<arm>/" in rendered

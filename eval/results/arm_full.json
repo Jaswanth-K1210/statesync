@@ -55,10 +55,10 @@
   "repairs": {},
   "storage": "in-memory",
   "throughput": {
-    "p50_us": 6,
-    "p99_us": 44,
+    "p50_us": 4,
+    "p99_us": 20,
     "records": 1040,
-    "wall_clock_us": 68459
+    "wall_clock_us": 43587
   },
   "transient_filtered": 1,
   "verdicts": {

@@ -255,3 +255,25 @@ def test_running_the_suite_does_not_mutate_the_committed_packets():
     override = os.getenv("STATESYNC_PACKETS_DIR")
     assert override, "the session must redirect packet writes"
     assert not str(PACKETS_DIR).startswith(override)
+
+
+def test_exceptions_csv_matches_the_served_arm_escalations():
+    """One list, one arm, stated in both artifacts."""
+    import csv as _csv
+    import json as _json
+
+    from eval.arms import SERVED_ARM
+
+    from statesync.config import PROJECT_ROOT
+
+    rows = list(_csv.DictReader(
+        line for line in (PROJECT_ROOT / "exceptions.csv").open()
+        if not line.startswith("#")
+    ))
+    arm_result = _json.loads(
+        (PROJECT_ROOT / "eval" / "results" / f"arm_{SERVED_ARM}.json").read_text()
+    )
+    assert len(rows) == arm_result["exceptions_count"]
+
+    packets = PROJECT_ROOT / "eval" / "results" / "packets" / SERVED_ARM
+    assert {p.stem for p in packets.glob("*.json")} == {r["payment_id"] for r in rows}

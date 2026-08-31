@@ -12,7 +12,7 @@
     },
     {
       "where": "arm 3's provider",
-      "what": "The model provider was constructed, then the hard-case fixture provider was consumed instead — arm 3 read canned answers and reported zero model calls."
+      "what": "The model provider was constructed, then the hard-case fixture provider was consumed instead \u2014 arm 3 read canned answers and reported zero model calls."
     },
     {
       "where": "warm_cache",
@@ -20,7 +20,7 @@
     },
     {
       "where": "provider latency",
-      "what": "Retry backoff was measured inside the timed call, so sleep was reported as generation cost — a measurement taken at the wrong boundary."
+      "what": "Retry backoff was measured inside the timed call, so sleep was reported as generation cost \u2014 a measurement taken at the wrong boundary."
     },
     {
       "where": "rejection-rate prose",
@@ -29,6 +29,10 @@
     {
       "where": "Ledger.verify()",
       "what": "Correct, thoroughly tested, and called by nothing. A tampered chain would have been detected and then ignored while repairs kept writing."
+    },
+    {
+      "where": "the test suite and eval/results/packets/",
+      "what": "Unqualified run_arm calls wrote into the committed packets directory, so running pytest edited the artifacts it then asserted against. The most serious instance: the evidence was being changed by the thing that checks it, and the reproduction claim rests on those artifacts."
     }
   ]
 }

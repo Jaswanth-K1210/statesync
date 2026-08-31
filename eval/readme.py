@@ -20,6 +20,7 @@ import json
 import subprocess
 from typing import Any
 
+from eval.arms import SERVED_ARM
 from statesync.classifier.settlement import settlement_gap_report
 from statesync.config import CACHE_DIR, PROJECT_ROOT, SEED
 
@@ -118,6 +119,11 @@ if this file drifts from what regeneration produces.
 
 Seed `{seed}` · {records} synthetic records · {injected} injected divergences ·
 {hard_cases} hard cases.
+
+**Every figure below is from the served arm, `{served_arm}`** — rules plus the
+propose-verify layer. Per-arm escalation packets are in
+`eval/results/packets/<arm>/`, and `exceptions.csv` is the served arm's list, so
+a reader comparing the two never has to infer which run produced which file.
 
 | arm | match rate | detected | missed | false positives | rec/s | LLM calls |
 |---|---|---|---|---|---|---|
@@ -388,6 +394,7 @@ def render_readme(include_timing: bool = True) -> str:
         backoff_ms=cold.get("backoff_ms", 0),
         chain_overhead_ms=cold.get("chain_overhead_ms", 0),
         settlement_status=settlement_gap_report()["status"],
+        served_arm=SERVED_ARM,
         seam_count=len(seams["instances"]),
         seam_shape=seams["shape"],
         seam_rows="\n".join(
