@@ -21,7 +21,7 @@ def divergence(klass=DivergenceClass.CAPTURED_NO_ORDER, pid="pay_1", amount=4000
 
 
 def read(path):
-    """Skip the leading `#` summary line the way any CSV consumer would."""
+    """Skip the leading `#` comment lines the way any CSV consumer would."""
     with path.open(newline="", encoding="utf-8") as fh:
         lines = [ln for ln in fh if not ln.startswith("#")]
     return list(csv.DictReader(lines))
@@ -74,7 +74,8 @@ def test_an_empty_run_still_writes_a_header(tmp_path):
     """An empty file and a missing file mean different things."""
     path = tmp_path / "exceptions.csv"
     assert write_exceptions_csv(path, []) == 0
-    assert path.read_text().splitlines()[1] == ",".join(EXCEPTION_COLUMNS)
+    header = next(ln for ln in path.read_text().splitlines() if not ln.startswith("#"))
+    assert header == ",".join(EXCEPTION_COLUMNS)
 
 
 def test_timestamps_are_iso8601_utc(tmp_path):
@@ -110,3 +111,14 @@ def test_summary_counts_reflect_actual_rows(tmp_path):
     path = tmp_path / "exceptions.csv"
     write_exceptions_csv(path, [divergence(pid="a"), divergence(pid="b")], detected=10)
     assert "2 exceptions of 10 divergences" in path.read_text().splitlines()[0]
+
+
+def test_the_file_explains_that_a_correct_refusal_produces_no_row(tmp_path):
+    """Someone opening this file alone must not need the README to learn that
+    an absent row can be the right outcome — case 7 is the case the project is
+    proudest of and it appears here as nothing at all."""
+    path = tmp_path / "exceptions.csv"
+    write_exceptions_csv(path, [], detected=124)
+    body = path.read_text()
+    assert "Correct refusals produce NO row" in body
+    assert "Case 7" in body

@@ -129,7 +129,7 @@ def test_exceptions_csv_is_written_with_a_header(tmp_path):
     path = tmp_path / "exceptions.csv"
     result = run_arm("rules", seed=SEED, n=500, rate=0.25, exceptions_path=path)
     assert path.exists()
-    assert path.read_text().count("\n") == result.exceptions_count + 2  # summary + header
+    assert path.read_text().count("\n") == result.exceptions_count + 4  # 3 comment lines + header
 
 
 def test_a_clean_only_batch_legitimately_has_zero_exceptions(tmp_path):

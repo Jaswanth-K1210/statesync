@@ -15,7 +15,7 @@ escalate, report.** One loop. Six kinds of disagreement.
 ## Reproduce every number below
 
 ```
-make setup && make verify     # lint, types, 642 tests
+make setup && make verify     # lint, types, 643 tests
 make eval                     # regenerates every figure in this file
 make readme                   # regenerates this file from that output
 ```

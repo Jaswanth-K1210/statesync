@@ -55,9 +55,20 @@ def write_exceptions_csv(
     summary = f"# {len(rows)} exceptions of {total} divergences detected"
     if context:
         summary += f" ({context})"
+    # A reader opening this file alone should not have to consult the README to
+    # learn that an absent row can be the correct outcome. Case 7 — two
+    # legitimate orders, one customer, one amount, seconds apart — is the case
+    # the project is proudest of, and it appears here as nothing at all.
+    notes = (
+        "# Correct refusals produce NO row: a divergence the system declined to "
+        "act on is not an exception.\n"
+        "# Case 7 (two legitimate orders, same customer, same amount, seconds "
+        "apart) is absent for that reason.\n"
+    )
 
     with path.open("w", newline="", encoding="utf-8") as fh:
         fh.write(summary + "\n")
+        fh.write(notes)
         writer = csv.DictWriter(fh, fieldnames=EXCEPTION_COLUMNS, lineterminator="\n")
         writer.writeheader()
         for divergence in rows:
