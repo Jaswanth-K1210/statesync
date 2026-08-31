@@ -11,7 +11,7 @@ COMPOSE := docker compose
 .DEFAULT_GOAL := help
 .PHONY: help setup up down test test-unit test-prop test-int test-chaos test-e2e \
         smoke smoke-frontend verify determinism eval eval-arm demo lint clean test-ui \
-        warm-cache readme reproduce stop stop-hard ui
+        warm-cache readme reproduce stop stop-hard ui eval-throughput
 
 help:  ## show this help
 	@grep -hE '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) | sort | \
@@ -88,6 +88,9 @@ lint:  ## ruff + mypy --strict
 
 eval:  ## the 3-arm measurement run, regenerates README numbers
 	$(PY) -m eval.harness --seed $(SEED) --n 500
+
+eval-throughput:  ## re-measure and record the dated throughput snapshot
+	$(PY) -m eval.harness --seed $(SEED) --n 500 --record-throughput
 
 warm-cache:  ## populate and commit the LLM cache (records which client filled it)
 	$(PY) -m eval.warm_cache

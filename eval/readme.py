@@ -51,6 +51,14 @@ def load_seam_bugs() -> dict[str, Any]:
     }
 
 
+def load_throughput() -> dict[str, Any]:
+    """The dated throughput snapshot. Read, never re-measured at render time —
+    otherwise the README churns on every eval and a reviewer diffing it
+    concludes a figure was typed by hand."""
+    path = RESULTS_DIR / "throughput.json"
+    return json.loads(path.read_text()) if path.exists() else {"arms": {}}
+
+
 def load_manifest() -> dict[str, Any]:
     path = CACHE_DIR / "MANIFEST.json"
     return json.loads(path.read_text()) if path.exists() else {"cold": {}}
@@ -311,6 +319,7 @@ def render_readme(include_timing: bool = True) -> str:
     results = load_results()
     manifest = load_manifest()
     seams = load_seam_bugs()
+    throughput = load_throughput()
     cold = manifest.get("cold", {}) or {}
 
     none = results.get("none", {})
@@ -324,9 +333,11 @@ def render_readme(include_timing: bool = True) -> str:
     def rps(arm: dict[str, Any]) -> str:
         if not include_timing:
             return "~"
-        tp = arm.get("throughput", {})
-        micros = tp.get("wall_clock_us", 0) or 1
-        return f"{arm.get('records', 0) * 1_000_000 / micros:,.0f}"
+        measured = throughput.get("arms", {}).get(arm.get("arm", ""), {})
+        micros = measured.get("wall_clock_us", 0) or 0
+        if not micros:
+            return "—"
+        return f"{measured.get('records', 0) * 1_000_000 / micros:,.0f}"
 
     def code(arm: dict[str, Any], name: str) -> int:
         return int(arm.get("reason_codes", {}).get(name, 0))

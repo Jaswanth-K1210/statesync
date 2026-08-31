@@ -15,7 +15,7 @@ escalate, report.** One loop. Six kinds of disagreement.
 ## Reproduce every number below
 
 ```
-make setup && make verify     # lint, types, 637 tests
+make setup && make verify     # lint, types, 642 tests
 make eval                     # regenerates every figure in this file
 make readme                   # regenerates this file from that output
 ```
@@ -36,9 +36,9 @@ a reader comparing the two never has to infer which run produced which file.
 
 | arm | match rate | detected | missed | false positives | rec/s | LLM calls |
 |---|---|---|---|---|---|---|
-| 1 · no detection | 0.0% | 0 | 124 | 0 | 119,962 | 0 |
-| 2 · rules only | 100.0% | 124 | 0 | 0 | 1,798 | 0 |
-| 3 · rules + model | 100.0% | 124 | 0 | 0 | 11,471 | 10 |
+| 1 · no detection | 0.0% | 0 | 124 | 0 | 135,501 | 0 |
+| 2 · rules only | 100.0% | 124 | 0 | 0 | 2,557 | 0 |
+| 3 · rules + model | 100.0% | 124 | 0 | 0 | 16,283 | 10 |
 
 **100.0% is the expected floor, not an achievement.** Four of the six
 divergence classes are exact set operations; if a set difference failed to find

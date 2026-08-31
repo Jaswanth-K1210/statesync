@@ -1,4 +1,4 @@
-# 7 exceptions of 124 divergences detected (arm=full, seed=20260905, with hard cases)
+# 7 exceptions of 48 divergences detected (arm=full, seed=20260905, with hard cases)
 divergence_key,class,reason_code,payment_id,order_id,amount_paise,observed_at,detail
 03a0160ff28128542074456d0e92c5d6,amount_mismatch,no_hypothesis_verified,pay_hc15b,order_hc15b,125003,2026-10-01T00:00:00Z,fee_source=payment_object;instrument=card_domestic;known_paise=2950;residual_paise=1
 2b34ac41dd29d2994c73f0e341bd4836,amount_mismatch,no_hypothesis_verified,pay_hc06,order_hc06,400000,2026-10-01T00:00:00Z,fee_source=payment_object;instrument=card_domestic;known_paise=9440;residual_paise=60

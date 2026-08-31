@@ -208,3 +208,20 @@ def test_the_readme_names_the_arm_it_quotes(rendered):
 
 def test_the_readme_points_at_the_per_arm_packet_location(rendered):
     assert "eval/results/packets/<arm>/" in rendered
+
+
+def test_a_routine_eval_does_not_move_the_readme():
+    """A reviewer runs `make eval && git diff README.md` and expects nothing.
+    If throughput were read live, the diff would appear and they would conclude
+    a figure had been typed by hand — the opposite of the truth."""
+    first = render_readme()
+    second = render_readme()
+    assert first == second
+
+
+def test_throughput_is_read_from_the_dated_snapshot_not_measured_now():
+    from eval.readme import load_throughput
+
+    snapshot = load_throughput()
+    assert "measured_at" in snapshot
+    assert snapshot["arms"], "the snapshot carries the figures the README quotes"

@@ -1,0 +1,23 @@
+{
+  "arms": {
+    "full": {
+      "p50_us": 3,
+      "p99_us": 14,
+      "records": 500,
+      "wall_clock_us": 30707
+    },
+    "none": {
+      "p50_us": 0,
+      "p99_us": 0,
+      "records": 500,
+      "wall_clock_us": 3690
+    },
+    "rules": {
+      "p50_us": 3,
+      "p99_us": 28,
+      "records": 500,
+      "wall_clock_us": 195526
+    }
+  },
+  "measured_at": "2026-08-31T17:53:43Z"
+}

@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import json
+from datetime import UTC, datetime
 from pathlib import Path
 
 from eval.arms import SERVED_ARM, ArmResult, make_repair_runner, run_arm
@@ -22,6 +23,9 @@ from statesync.config import PROJECT_ROOT, SEED
 __all__ = ["main", "render", "render_idempotency"]
 
 RESULTS_DIR = PROJECT_ROOT / "eval" / "results"
+THROUGHPUT_PATH = RESULTS_DIR / "throughput.json"
+"""Wall-clock figures, dated. Kept out of the arm results so a routine
+`make eval` produces byte-identical files."""
 
 
 def _pct(value: float) -> str:
@@ -238,6 +242,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--rate", type=float, default=0.25)
     parser.add_argument("--arm", default=None, help="run a single arm")
     parser.add_argument("--results-dir", type=Path, default=RESULTS_DIR)
+    parser.add_argument(
+        "--exceptions-path", type=Path, default=PROJECT_ROOT / "exceptions.csv",
+        help="where the served arm's exception list is written",
+    )
+    parser.add_argument(
+        "--record-throughput", action="store_true",
+        help="re-measure and overwrite the dated throughput snapshot",
+    )
     args = parser.parse_args(argv)
 
     arms = [args.arm] if args.arm else ["none", "rules", "full"]
@@ -250,9 +262,7 @@ def main(argv: list[str] | None = None) -> int:
         # two artifacts disagree about whether hc09 was resolved.
         run_arm(arm, seed=args.seed, n=args.n, rate=args.rate, repair=(arm == "rules"),
                 hard_cases=True,
-                exceptions_path=(
-                    PROJECT_ROOT / "exceptions.csv" if arm == SERVED_ARM else None
-                ))
+                exceptions_path=args.exceptions_path if arm == SERVED_ARM else None)
         for arm in arms
     ]
 
@@ -274,11 +284,33 @@ def main(argv: list[str] | None = None) -> int:
             ("3 · after redis FLUSHALL", third.repairs),
         ]))
 
+    # Arm results are the DETERMINISTIC record: two runs at one seed must
+    # produce byte-identical files, because "clone this and reproduce every
+    # number" is the claim everything else rests on. A reviewer running
+    # `make eval` twice and diffing these will see nothing.
+    #
+    # Throughput cannot be byte-stable — it is wall clock. It lives in its own
+    # dated snapshot, rewritten only by `--record-throughput`, so a routine
+    # eval does not churn the results or the README.
     for result in results:
-        payload = result.as_event() | {"throughput": result.throughput.as_event()}
         (args.results_dir / f"arm_{result.arm}.json").write_text(
-            json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+            json.dumps(result.as_event(), indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
         )
+
+    if args.record_throughput:
+        snapshot = {
+            "measured_at": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "arms": {
+                r.arm: r.throughput.as_event() | {"records": r.records}
+                for r in results
+            },
+        }
+        THROUGHPUT_PATH.write_text(
+            json.dumps(snapshot, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        )
+        print(f"throughput snapshot recorded at {snapshot['measured_at']}")  # noqa: T201
+
     return 0
 
 

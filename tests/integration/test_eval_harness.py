@@ -445,3 +445,61 @@ def test_arm_three_reports_cold_and_warm_separately():
                    provider=provider)
     assert warm.llm_calls > 0
     assert warm.network_calls == 0
+
+
+# ── the reproduction claim, asserted ────────────────────────────────────────
+
+def test_two_evals_write_byte_identical_arm_results(tmp_path):
+    """`make eval` twice must produce identical files.
+
+    Throughput used to be written into these, so a reviewer running
+    `make eval && sha256sum eval/results/*.json` twice saw a difference and
+    concluded determinism was broken. Wall clock now lives in its own dated
+    snapshot; the arm results carry only the deterministic record.
+    """
+    import hashlib
+
+    from eval.harness import main
+
+    def digest() -> dict[str, str]:
+        # Both outputs redirected: calling main() with defaults writes the
+        # COMMITTED exceptions.csv, which is instance 8 recurring inside the
+        # very test added to prevent it.
+        main([
+            "--seed", str(SEED), "--n", "200",
+            "--results-dir", str(tmp_path),
+            "--exceptions-path", str(tmp_path / "exceptions.csv"),
+        ])
+        return {
+            p.name: hashlib.sha256(p.read_bytes()).hexdigest()
+            for p in sorted(tmp_path.glob("arm_*.json"))
+        }
+
+    assert digest() == digest()
+
+
+def test_the_arm_results_carry_no_wall_clock():
+    """Anything derived from wall clock cannot be byte-stable, so it does not
+    belong in the file the reproduction check diffs."""
+    import json
+
+    from statesync.config import PROJECT_ROOT
+
+    for arm in ("none", "rules", "full"):
+        payload = json.loads(
+            (PROJECT_ROOT / "eval" / "results" / f"arm_{arm}.json").read_text()
+        )
+        assert "throughput" not in payload
+        assert not [k for k in payload if "wall_clock" in k or "_us" in k]
+
+
+def test_the_throughput_snapshot_is_dated_and_separate():
+    import json
+
+    from statesync.config import PROJECT_ROOT
+
+    snapshot = json.loads(
+        (PROJECT_ROOT / "eval" / "results" / "throughput.json").read_text()
+    )
+    assert snapshot["measured_at"].endswith("Z")
+    assert set(snapshot["arms"]) == {"none", "rules", "full"}
