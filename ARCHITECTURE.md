@@ -226,3 +226,20 @@ thoroughly tested, and called by nothing — so a tampered chain would have been
 detected and then ignored while repairs kept writing. The most important
 guarantee in the design existed as prose for six phases, and no component test
 could have told us, because no component was wrong.
+
+
+## 13. Never `pkill` on a pattern broader than this project
+
+A bare `pkill -f "make verify"` took down the Docker daemon twice during this
+build. Postgres and Redis went with it, and the run that followed failed with
+connection errors that pointed nowhere near the cause.
+
+It is the same shape as the seam bugs in `docs/seam_bugs.json`: something
+trusted to be narrow that was not, with no test between the assumption and the
+consequence.
+
+The fix is the one applied everywhere else here — make the unsafe form
+impossible rather than remembering not to type it. `scripts/stop.sh`
+(`make stop`) scopes to this project's compose stack and to pytest processes
+belonging to *this checkout's* virtualenv. Nothing else in the repo or its
+tooling calls `pkill` with a bare pattern.

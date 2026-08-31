@@ -11,7 +11,7 @@ COMPOSE := docker compose
 .DEFAULT_GOAL := help
 .PHONY: help setup up down test test-unit test-prop test-int test-chaos test-e2e \
         smoke smoke-frontend verify determinism eval eval-arm demo lint clean \
-        warm-cache readme reproduce
+        warm-cache readme reproduce stop stop-hard
 
 help:  ## show this help
 	@grep -hE '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) | sort | \
@@ -31,6 +31,12 @@ up:  ## start Postgres and Redis (skipped when STATESYNC_NO_COMPOSE=1)
 
 down:  ## stop Postgres and Redis
 	$(COMPOSE) down
+
+stop:  ## stop this project's containers and test runs, and nothing else
+	@bash scripts/stop.sh
+
+stop-hard:  ## stop and drop volumes
+	@bash scripts/stop.sh --hard
 
 test: test-unit test-prop test-int test-chaos  ## every test layer built so far
 
