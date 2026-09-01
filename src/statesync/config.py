@@ -9,7 +9,7 @@ from pathlib import Path
 __all__ = [
     "ADMIN_DSN", "APP_DSN", "BASE_TIME", "CACHE_DIR", "LEASE_SECONDS",
     "MIGRATIONS_DIR", "ORDER_TIMEOUT", "PROJECT_ROOT", "REDIS_URL", "SEED",
-    "STALENESS_WINDOW", "STRICT",
+    "STALENESS_WINDOW",
 ]
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -29,10 +29,6 @@ LEASE_SECONDS = 300
 
 CACHE_DIR = PROJECT_ROOT / "llm_cache"
 """Committed to the repo. The demo must not depend on a network call."""
-
-STRICT = os.getenv("STATESYNC_STRICT", "1") == "1"
-"""Dev: raise on a violated invariant. Prod: halt repairs and fail closed.
-Either way the violation is written to the ledger first — never swallowed."""
 
 MIGRATIONS_DIR = PROJECT_ROOT / "migrations"
 

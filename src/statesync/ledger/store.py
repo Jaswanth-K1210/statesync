@@ -49,10 +49,6 @@ class LedgerStore:
                 ),
             )
 
-    def append_all(self, entries: list[LedgerEntry]) -> None:
-        for entry in entries:
-            self.append(entry)
-
     def load(self) -> list[LedgerEntry]:
         with psycopg.connect(self.dsn) as conn:
             rows: list[Any] = conn.execute(

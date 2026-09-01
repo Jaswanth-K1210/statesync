@@ -218,9 +218,18 @@ established.
 | repairs after flushing Redis | {flush_writes} |
 
 Running the same batch twice writes nothing the second time, and flushing Redis
-entirely changes nothing — the database unique constraint is the guarantee and
-the Redis lease is an optimisation on top of it. Mutation testing confirms the
+entirely changes nothing. The uniqueness constraint is the guarantee and the
+Redis lease is an optimisation on top of it — mutation testing confirms the
 distinction: removing the lease does not cause a double repair.
+
+**Read that precisely.** The eval above runs against the in-memory store, so
+the figures in this section demonstrate the constraint *as that store enforces
+it*. The Postgres implementation carries the same constraint in the schema and
+is exercised by `tests/integration/test_postgres_repair_store.py` — including
+that the application role holds `SELECT, INSERT` and cannot `UPDATE` or
+`DELETE` — but it is not on the path that produced these numbers. Both
+implementations are held to one contract by a shared test suite; only one of
+them is measured here.
 
 `exceptions.csv` is committed. Case 7 — two legitimate orders, same customer,
 same amount, seconds apart — produces **no row**, because not merging them is

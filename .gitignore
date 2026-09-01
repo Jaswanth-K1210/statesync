@@ -15,5 +15,4 @@ eval/results/tmp/
 *.pem
 frontend/node_modules/
 frontend/dist/
-frontend/test-results/
-frontend/playwright-report/
+frontend/tsconfig.tsbuildinfo
