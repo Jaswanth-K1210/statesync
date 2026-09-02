@@ -17,11 +17,17 @@ pause() { [ "${DEMO_PAUSE:-1}" = "1" ] && read -rp $'\n    [enter]' _ || true; }
 
 beat "1 · the problem" "0:00–0:40"
 cat <<'TXT'
-    razorpay/razorpay-magento#208 — a merchant enables webhooks and gets
-    duplicate orders. They disable webhooks and lose paid orders.
+    Webhooks deliver at-least-once, in no guaranteed order, and give up
+    permanently after 24 hours.
 
-    There is no correct setting. That fork is the problem, reported in
-    their own issue tracker.
+    So a merchant who turns them on gets duplicate orders, and one who
+    turns them off loses paid ones. razorpay/razorpay-magento#208 is that
+    merchant, in Razorpay's own issue tracker. There is no correct setting.
+
+    Either way the money moved and the merchant's database does not know it.
+
+    Today a human notices — usually after a customer complains — and
+    reconciles it by hand.
 TXT
 pause
 
@@ -47,6 +53,18 @@ grep -c "pay_hc07" exceptions.csv || echo "        0 — not merged, nothing to 
 pause
 
 beat "4 · every guard fired on real model output" "2:10–3:00"
+# Say this AS the zero renders, not after it. `llm_calls: 0` beside a README
+# claiming a measured generation cost misleads by adjacency — a reviewer who
+# does not ask leaves believing no model ever ran. Figures below are read from
+# llm_cache/MANIFEST.json; if they ever disagree, the manifest is right.
+cat <<'TXT'
+    Every model response is cached and committed, so this demo is
+    reproducible and needs no API key. The cold run happened once — eight
+    calls, 1,493ms mean on openai/gpt-oss-120b — recorded in
+    llm_cache/MANIFEST.json with the date and the model. What you are
+    watching replays that.
+TXT
+echo
 make eval 2>/dev/null | sed -n '/earn its place/,/^  LIMIT/p'
 pause
 
