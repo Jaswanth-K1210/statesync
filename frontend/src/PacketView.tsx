@@ -117,8 +117,15 @@ export function PacketView({ packet }: { packet: Packet }) {
           {packet.hypotheses.length === 1 ? "" : "s"}, rejected ones included
         </h3>
         {packet.hypotheses.length === 0 ? (
+          // Zero candidates means two opposite things, and "None were
+          // generated" was wrong for one of them. FEE_SCHEDULE_UNKNOWN never
+          // reached generation — there was no residual to explain. Everything
+          // else was priced fine and the provider simply had no ideas.
           <p className="why">
-            None were generated. {packet.needed_config ? `Needs: ${packet.needed_config}` : ""}
+            {packet.reason_code === "fee_schedule_unknown"
+              ? "Not priced — no hypothesis could be generated."
+              : "Provider returned no candidates."}{" "}
+            {packet.needed_config ? `Needs: ${packet.needed_config}` : ""}
           </p>
         ) : (
           packet.hypotheses.map((h) => <HypothesisCard key={h.label} hypothesis={h} />)

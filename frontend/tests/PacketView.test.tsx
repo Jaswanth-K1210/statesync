@@ -174,7 +174,7 @@ describe("packet viewer", () => {
     );
     expect(screen.queryAllByTestId("hypothesis")).toHaveLength(0);
     expect(screen.getByTestId("reason-code").textContent).toBe("fee_schedule_unknown");
-    expect(screen.getByText(/None were generated/)).toBeDefined();
+    expect(screen.getByText(/Not priced/)).toBeDefined();
     expect(screen.getByText(/fee_schedule.rates.crypto_voucher/)).toBeDefined();
     expect(screen.getByTestId("residual").textContent).toBe("₹0.00");
   });
@@ -212,5 +212,38 @@ describe("money", () => {
 
   it.each(cases)("renders %i paise as %s", (paise, expected) => {
     expect(rupees(paise)).toBe(expected);
+  });
+});
+
+describe("empty candidate lists mean two different things", () => {
+  it("says the fee was never priced when generation could not run", () => {
+    render(
+      <PacketView
+        packet={packet({
+          payment_id: "pay_hc17",
+          hypotheses: [],
+          reason_code: "fee_schedule_unknown",
+          needed_config: "fee_schedule.rates.crypto_voucher",
+        })}
+      />,
+    );
+    expect(screen.getByText(/Not priced/)).toBeDefined();
+    expect(screen.queryByText(/Provider returned no candidates/)).toBeNull();
+  });
+
+  it("says the provider returned nothing when it was priced and ran", () => {
+    // pay_hc15b: priced fine, residual computed, provider had no ideas. The
+    // old copy called this "None were generated", which was factually wrong.
+    render(
+      <PacketView
+        packet={packet({
+          payment_id: "pay_hc15b",
+          hypotheses: [],
+          reason_code: "no_hypothesis_verified",
+        })}
+      />,
+    );
+    expect(screen.getByText(/Provider returned no candidates/)).toBeDefined();
+    expect(screen.queryByText(/Not priced/)).toBeNull();
   });
 });

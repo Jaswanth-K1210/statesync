@@ -67,6 +67,10 @@ def list_divergences(
         if reason_code and packet["reason_code"] != reason_code:
             continue
         rows.append({
+            # The arm travels with the data. The screen showing one arm while
+            # the README quotes another is the bug class that had hc09 with
+            # zero hypotheses on disk and a resolution in the table.
+            "served_arm": SERVED_ARM,
             "payment_id": packet["payment_id"],
             "reason_code": packet["reason_code"],
             "residual_paise": packet["residual_paise"],

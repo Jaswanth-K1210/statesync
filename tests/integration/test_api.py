@@ -101,3 +101,13 @@ def test_the_list_is_ordered_stably(api):
 
 def test_list_divergences_works_without_a_server():
     assert len(list_divergences()) > 0
+
+
+def test_the_list_names_the_arm_it_is_serving(api):
+    """The screen showing one arm while the README quotes another is the bug
+    class that had hc09 with zero hypotheses on disk and a resolution in the
+    table. The arm travels with the data."""
+    from eval.arms import SERVED_ARM
+
+    _, rows = get(api, "/api/divergences")
+    assert rows and all(r["served_arm"] == SERVED_ARM for r in rows)

@@ -29,6 +29,8 @@ body {
 .list { border-right: 1px solid var(--border); overflow-y: auto; }
 .list h1 { font-size: 13px; letter-spacing: .08em; text-transform: uppercase;
            color: var(--dim); padding: 20px 20px 10px; margin: 0; font-weight: 600; }
+.list h1 .arm { color: var(--dim); font-weight: 400; }
+
 .filters { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 20px 14px; }
 .filters button {
   font: 11px var(--mono); background: none; color: var(--dim);

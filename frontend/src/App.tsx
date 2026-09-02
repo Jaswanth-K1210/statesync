@@ -12,6 +12,7 @@ const REASONS = [
 
 export function App() {
   const [rows, setRows] = useState<Summary[]>([]);
+  const [arm, setArm] = useState<string>("");
   const [reason, setReason] = useState("all");
   const [selected, setSelected] = useState<string | null>(null);
   const [packet, setPacket] = useState<Packet | null>(null);
@@ -22,6 +23,7 @@ export function App() {
       .then((r) => r.json())
       .then((data: Summary[]) => {
         setRows(data);
+        if (data.length > 0 && data[0].served_arm) setArm(data[0].served_arm);
         setSelected(data.length > 0 ? data[0].payment_id : null);
       });
   }, [reason]);
@@ -39,7 +41,9 @@ export function App() {
   return (
     <div className="layout">
       <nav className="list">
-        <h1>Escalations</h1>
+        <h1>
+          Escalations{arm ? <span className="arm"> · arm: {arm}</span> : null}
+        </h1>
         <div className="filters">
           {REASONS.map((r) => (
             <button key={r} aria-pressed={reason === r} onClick={() => setReason(r)}>

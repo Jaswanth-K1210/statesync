@@ -56,6 +56,7 @@ export interface Packet {
 }
 
 export interface Summary {
+  served_arm?: string;
   payment_id: string;
   reason_code: string;
   residual_paise: number;
