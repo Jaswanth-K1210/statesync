@@ -1,0 +1,41 @@
+{
+  "captures": 120,
+  "cycles": 10,
+  "detected": 5,
+  "false_positives": 0,
+  "gap_kinds": [
+    "undisclosed_reserve",
+    "prior_cycle_chargeback",
+    "instant_settlement",
+    "next_cycle_capture",
+    "ambiguous",
+    "unexplained"
+  ],
+  "hypotheses": 8,
+  "injected": 5,
+  "llm_calls": 0,
+  "missed": 0,
+  "outcome_by_kind": {
+    "ambiguous": "ambiguous_multiple_verified",
+    "instant_settlement": "verified",
+    "prior_cycle_chargeback": "verified",
+    "undisclosed_reserve": "verified",
+    "unexplained": "no_hypothesis_verified"
+  },
+  "payouts": 10,
+  "reason_codes": {
+    "ambiguous_multiple_verified": 1,
+    "no_hypothesis_verified": 1,
+    "verified": 3
+  },
+  "rejected": 3,
+  "seed": 20260905,
+  "settlement_lag_cycles": 2,
+  "status": "not_implemented",
+  "timing_boundaries_not_flagged": 1,
+  "verdicts": {
+    "ARITHMETIC_FAILED": 2,
+    "ARTIFACT_MISSING": 1,
+    "VERIFIED": 5
+  }
+}

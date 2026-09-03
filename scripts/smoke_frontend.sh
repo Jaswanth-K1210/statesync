@@ -28,7 +28,7 @@ preview_pid=$!
 
 for _ in $(seq 1 40); do
   if curl -sf http://127.0.0.1:8787/api/divergences >/dev/null 2>&1 \
-     && curl -sf http://127.0.0.1:5174 >/dev/null 2>&1; then
+     && curl -sf http://localhost:5174 >/dev/null 2>&1; then
     break
   fi
   sleep 0.25
@@ -43,7 +43,7 @@ echo "==> one packet loads whole"
 curl -sf http://127.0.0.1:8787/api/divergences/pay_hc13 | grep -q ambiguous_multiple_verified \
   || { echo "FAIL: the ambiguous packet did not serve" >&2; exit 1; }
 
-curl -sf http://127.0.0.1:5174 | grep -q '<div id="root">' \
+curl -sf http://localhost:5174 | grep -q '<div id="root">' \
   || { echo "FAIL: the app did not serve" >&2; exit 1; }
 
 elapsed=$(( $(date +%s) - start ))

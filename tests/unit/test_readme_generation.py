@@ -54,8 +54,9 @@ def test_the_template_contains_no_bare_numbers():
         line.strip() for line in prose.splitlines()
         if re.search(r"(?<![\w-])\d", line)
         # Identifiers, not measurements: "Case 7" names a fixture, "arm 3"
-        # names an arm. Neither is a figure that can go stale.
-        and not re.search(r"(Phase|phase|[Cc]ase|arm|§|v)\s*\d", line)
+        # names an arm, "T+2" names a settlement convention. None is a figure
+        # that can go stale. Where the lag IS quoted as data it is templated.
+        and not re.search(r"(Phase|phase|[Cc]ase|arm|§|v)\s*\d|T\+\d", line)
     ]
     assert not offenders, f"hardcoded figures in the README template: {offenders[:3]}"
 
@@ -106,8 +107,11 @@ def test_the_readme_states_the_completeness_limit(rendered):
     assert "omission" in lowered or "never proposed" in lowered
 
 
-def test_the_readme_says_settlement_gap_is_not_implemented(rendered):
-    assert "not_implemented" in rendered.lower()
+def test_the_readme_says_settlement_is_demonstrated_not_validated(rendered):
+    lowered = rendered.lower()
+    assert "demonstrated_synthetic" in lowered
+    assert "demonstrated, not validated" in lowered
+    assert "never merged into the record-level results" in lowered
 
 
 def test_the_readme_says_determinism_rests_on_the_cache(rendered):

@@ -15,7 +15,7 @@ escalate, report.** One loop. Six kinds of disagreement.
 ## Reproduce every number below
 
 ```
-make setup && make verify     # lint, types, 643 tests
+make setup && make verify     # lint, types, 662 tests
 make eval                     # regenerates every figure in this file
 make readme                   # regenerates this file from that output
 ```
@@ -155,13 +155,47 @@ times. **That is the cache working, not a generation cost of zero** — and
 **determinism rests on the cache, not on the model.** The demo needs no API key,
 and a smoke test asserts that with no client configured at all.
 
-## SETTLEMENT_GAP
+## Settlement reconciliation
 
-Status: `not_implemented`. The class stays in the taxonomy because it is
-where the propose-verify architecture generalises, but nothing detects it. The
-sandbox produces no genuine settlement behaviour, so any payout data would be
-manufactured — and an accuracy figure computed against manufactured data is not
-a measurement. No accuracy is reported and it is never merged into a headline.
+Status: `demonstrated_synthetic`.
+
+Settlement reconciliation is demonstrated against synthetic payout data.
+Razorpay's test mode does not produce real settlement behaviour — no genuine
+T+2 cycle, no rolling reserve, no payout webhook carrying real fee deductions.
+**This is demonstrated, not validated.** Its metrics are reported separately
+and are never merged into the record-level results above.
+
+It is a different shape from the reconciliation above. A payment is compared
+against one order; a payout is compared against a *set* of captures, refunds
+and fees, and it settles two cycles after those captures were made. A capture
+made late lands in the next payout, so summing by date reads timing as loss —
+the payout says which captures it covers, and that list is what gets summed.
+
+10 payouts over 10 cycles,
+120 captures, T+2.
+
+| | |
+|---|---|
+| gaps injected | 5 |
+| detected | 5 |
+| missed | 0 |
+| false positives | 0 |
+| timing boundaries correctly not flagged | 1 |
+
+| injected gap | outcome |
+|---|---|
+| ambiguous | ambiguous_multiple_verified |
+| instant_settlement | verified |
+| prior_cycle_chargeback | verified |
+| undisclosed_reserve | verified |
+| unexplained | no_hypothesis_verified |
+
+The verifier ruled on 8 candidates here and rejected
+3. Attribution runs through the same propose-verify path as
+the record-level work, unchanged: known components subtracted first, only the
+residual proposed against, verified to the exact paise. It adds
+0 model calls — the candidate sets are deterministic fixtures,
+so this section costs nothing against a provider.
 
 ## What this is not
 

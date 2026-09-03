@@ -30,7 +30,16 @@ class SettlementStatus(StrEnum):
     VALIDATED = "validated"
 
 
-SETTLEMENT_GAP_STATUS = SettlementStatus.NOT_IMPLEMENTED
+SETTLEMENT_GAP_STATUS = SettlementStatus.DEMONSTRATED_SYNTHETIC
+"""Moved off NOT_IMPLEMENTED once it was earned, not before.
+
+The gate was: the T+2 timing boundary must not be flagged as a gap, both
+refusal cases must refuse, and attribution must verify at a usable rate. All
+three hold — see `eval/results/settlement/settlement.json`.
+
+**Demonstrated, not validated.** The sandbox produces no genuine settlement
+behaviour, so the payout data is manufactured. Its metrics are reported
+separately and never merged into the record-level headline."""
 
 
 def settlement_gap_report() -> dict[str, Any]:
@@ -38,17 +47,19 @@ def settlement_gap_report() -> dict[str, Any]:
     return {
         "klass": "settlement_gap",
         "status": SETTLEMENT_GAP_STATUS.value,
-        "accuracy": "not reported",
+        "accuracy": "reported separately",
         "merged_into_headline": False,
+        "results": "eval/results/settlement/settlement.json",
         "reason": (
             "The gateway sandbox produces no genuine settlement behaviour — no real "
             "T+2 cycle, no rolling reserve, no payout webhook carrying real fee "
-            "deductions. Any payout data would be manufactured here, and an accuracy "
-            "figure computed against manufactured data is not a measurement."
+            "deductions. The payout data is manufactured here, so this is "
+            "demonstrated rather than validated, and its figures are never merged "
+            "into the record-level results."
         ),
         "needed": (
             "Real payout records with per-transaction fee breakdowns, or a sandbox "
-            "that emits settlement webhooks. The propose-verify path extends to this "
-            "class unchanged once such data exists."
+            "that emits settlement webhooks, to move this from demonstrated to "
+            "validated. The propose-verify path already extends to it unchanged."
         ),
     }
