@@ -27,8 +27,11 @@ def test_the_class_remains_in_the_taxonomy():
     assert DivergenceClass.SETTLEMENT_GAP in set(DivergenceClass)
 
 
-def test_it_is_reported_as_not_implemented():
-    assert SETTLEMENT_GAP_STATUS == SettlementStatus.NOT_IMPLEMENTED
+def test_it_is_reported_as_demonstrated_not_validated():
+    """Moved off NOT_IMPLEMENTED once earned: the T+2 timing boundary is not
+    flagged, both refusals refuse, and attribution verifies. Demonstrated
+    against manufactured payout data — never validated against real behaviour."""
+    assert SETTLEMENT_GAP_STATUS == SettlementStatus.DEMONSTRATED_SYNTHETIC
 
 
 def test_it_is_never_auto_repaired():
@@ -38,9 +41,15 @@ def test_it_is_never_auto_repaired():
 
 def test_the_report_states_the_reason_rather_than_a_number():
     report = settlement_gap_report()
-    assert report["status"] == "not_implemented"
-    assert report["accuracy"] == "not reported"
+    assert report["status"] == "demonstrated_synthetic"
+    assert report["accuracy"] == "reported separately"
     assert "sandbox" in report["reason"].lower()
+    assert "demonstrated rather than validated" in report["reason"]
+
+
+def test_the_report_points_at_its_own_results_rather_than_inlining_them():
+    """Figures live in one place. Restating them here is instance twelve."""
+    assert settlement_gap_report()["results"].endswith("settlement.json")
 
 
 def test_the_report_never_quotes_an_accuracy_figure():

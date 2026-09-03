@@ -40,6 +40,13 @@ def load_results() -> dict[str, dict[str, Any]]:
     return out
 
 
+def load_settlement() -> dict[str, Any]:
+    """The settlement eval's own output. Absent until `python -m eval.settlement`
+    has run, and rendered as a separate section either way."""
+    path = RESULTS_DIR / "settlement" / "settlement.json"
+    return json.loads(path.read_text()) if path.exists() else {}
+
+
 def load_seam_bugs() -> dict[str, Any]:
     """The canonical list of same-shape bugs.
 
@@ -257,13 +264,43 @@ times. **That is the cache working, not a generation cost of zero** — and
 **determinism rests on the cache, not on the model.** The demo needs no API key,
 and a smoke test asserts that with no client configured at all.
 
-## SETTLEMENT_GAP
+## Settlement reconciliation
 
-Status: `{settlement_status}`. The class stays in the taxonomy because it is
-where the propose-verify architecture generalises, but nothing detects it. The
-sandbox produces no genuine settlement behaviour, so any payout data would be
-manufactured — and an accuracy figure computed against manufactured data is not
-a measurement. No accuracy is reported and it is never merged into a headline.
+Status: `{settlement_status}`.
+
+Settlement reconciliation is demonstrated against synthetic payout data.
+Razorpay's test mode does not produce real settlement behaviour — no genuine
+T+2 cycle, no rolling reserve, no payout webhook carrying real fee deductions.
+**This is demonstrated, not validated.** Its metrics are reported separately
+and are never merged into the record-level results above.
+
+It is a different shape from the reconciliation above. A payment is compared
+against one order; a payout is compared against a *set* of captures, refunds
+and fees, and it settles two cycles after those captures were made. A capture
+made late lands in the next payout, so summing by date reads timing as loss —
+the payout says which captures it covers, and that list is what gets summed.
+
+{settlement_payouts} payouts over {settlement_cycles} cycles,
+{settlement_captures} captures, T+{settlement_lag}.
+
+| | |
+|---|---|
+| gaps injected | {settlement_injected} |
+| detected | {settlement_detected} |
+| missed | {settlement_missed} |
+| false positives | {settlement_fp} |
+| timing boundaries correctly not flagged | {settlement_timing} |
+
+| injected gap | outcome |
+|---|---|
+{settlement_kinds}
+
+The verifier ruled on {settlement_hyps} candidates here and rejected
+{settlement_rejected}. Attribution runs through the same propose-verify path as
+the record-level work, unchanged: known components subtracted first, only the
+residual proposed against, verified to the exact paise. It adds
+{settlement_llm} model calls — the candidate sets are deterministic fixtures,
+so this section costs nothing against a provider.
 
 ## What this is not
 
@@ -328,6 +365,7 @@ def render_readme(include_timing: bool = True) -> str:
     results = load_results()
     manifest = load_manifest()
     seams = load_seam_bugs()
+    settlement = load_settlement()
     throughput = load_throughput()
     cold = manifest.get("cold", {}) or {}
 
@@ -414,6 +452,21 @@ def render_readme(include_timing: bool = True) -> str:
         backoff_ms=cold.get("backoff_ms", 0),
         chain_overhead_ms=cold.get("chain_overhead_ms", 0),
         settlement_status=settlement_gap_report()["status"],
+        settlement_payouts=settlement.get("payouts", 0),
+        settlement_cycles=settlement.get("cycles", 0),
+        settlement_captures=settlement.get("captures", 0),
+        settlement_lag=settlement.get("settlement_lag_cycles", 0),
+        settlement_injected=settlement.get("injected", 0),
+        settlement_detected=settlement.get("detected", 0),
+        settlement_missed=settlement.get("missed", 0),
+        settlement_fp=settlement.get("false_positives", 0),
+        settlement_timing=settlement.get("timing_boundaries_not_flagged", 0),
+        settlement_hyps=settlement.get("hypotheses", 0),
+        settlement_rejected=settlement.get("rejected", 0),
+        settlement_llm=settlement.get("llm_calls", 0),
+        settlement_kinds="\n".join(
+            f"| {k} | {v} |" for k, v in settlement.get("outcome_by_kind", {}).items()
+        ),
         served_arm=SERVED_ARM,
         seam_count=len(seams["instances"]),
         seam_shape=seams["shape"],
