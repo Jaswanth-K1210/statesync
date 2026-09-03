@@ -16,3 +16,6 @@ eval/results/tmp/
 frontend/node_modules/
 frontend/dist/
 frontend/tsconfig.tsbuildinfo
+
+# Local notes, not part of the submission.
+*.pdf
