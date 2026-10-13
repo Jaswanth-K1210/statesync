@@ -6,7 +6,9 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview --port 5174 --strictPort",
-    "test": "vitest run"
+    "test": "vitest run",
+    "coverage": "vitest run --coverage",
+    "build:static": "tsc -b && vite build --mode static"
   },
   "dependencies": {
     "react": "18.3.1",
@@ -17,9 +19,12 @@
     "@types/react": "18.3.18",
     "@types/react-dom": "18.3.5",
     "@vitejs/plugin-react": "4.3.4",
+    "@vitest/coverage-v8": "2.1.8",
+    "axe-core": "4.14.0",
     "jsdom": "25.0.1",
     "typescript": "5.7.2",
     "vite": "6.0.7",
-    "vitest": "2.1.8"
+    "vitest": "2.1.8",
+    "vitest-axe": "0.1.0"
   }
 }

@@ -61,6 +61,11 @@ body {
 
 table { border-collapse: collapse; width: 100%; }
 td, th { padding: 5px 0; text-align: left; }
+th { font-weight: inherit; }
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
 td.n, th.n { text-align: right; font: 13px var(--mono); font-variant-numeric: tabular-nums; }
 td.src { color: var(--dim); font: 11px var(--mono); padding-left: 16px; }
 

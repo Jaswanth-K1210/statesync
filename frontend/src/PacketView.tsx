@@ -12,7 +12,8 @@ function Citations({ hypothesis }: { hypothesis: Hypothesis }) {
     <>
       {hypothesis.citations.map((c) => (
         <span key={c.artifact} className={c.resolves ? "cite" : "cite missing"}>
-          {c.artifact}{" "}
+          {c.artifact}
+          {c.resolves ? null : <span className="sr-only"> (unresolved)</span>}{" "}
         </span>
       ))}
     </>
@@ -26,14 +27,27 @@ function HypothesisCard({ hypothesis }: { hypothesis: Hypothesis }) {
       <header>
         <span className="label">{hypothesis.label}</span>
         <span className="pass">pass {hypothesis.pass_no}</span>
-        <span className={`badge ${hypothesis.verdict}`}>{hypothesis.verdict}</span>
+        {/* The verdict is text; the glyph and colour only repeat it. */}
+        <span className={`badge ${hypothesis.verdict}`}>
+          <span aria-hidden="true">{verified ? "✓ " : "✗ "}</span>
+          <span className="sr-only">verdict: </span>
+          {hypothesis.verdict}
+        </span>
       </header>
 
       <table>
+        <caption className="sr-only">Components of {hypothesis.label}</caption>
+        <thead className="sr-only">
+          <tr>
+            <th scope="col">Component</th>
+            <th scope="col">Amount</th>
+            <th scope="col">Cites</th>
+          </tr>
+        </thead>
         <tbody>
           {hypothesis.components.map((c, i) => (
             <tr key={`${c.name}-${i}`}>
-              <td>{c.name}</td>
+              <th scope="row">{c.name}</th>
               <td className="n">{rupees(c.amount_paise)}</td>
               <td className="src">{c.cites}</td>
             </tr>
@@ -70,13 +84,14 @@ export function PacketView({ packet }: { packet: Packet }) {
       <section className="section">
         <h3>The case</h3>
         <table>
+          <caption className="sr-only">Order total and settled amount</caption>
           <tbody>
             <tr>
-              <td>Order total</td>
+              <th scope="row">Order total</th>
               <td className="n">{rupees(packet.order_total_paise)}</td>
             </tr>
             <tr>
-              <td>Settled</td>
+              <th scope="row">Settled</th>
               <td className="n">{rupees(packet.settled_paise)}</td>
             </tr>
           </tbody>
@@ -89,10 +104,18 @@ export function PacketView({ packet }: { packet: Packet }) {
           <p className="why">Nothing could be priced for this payment.</p>
         ) : (
           <table>
+            <caption className="sr-only">Known components</caption>
+            <thead className="sr-only">
+              <tr>
+                <th scope="col">Component</th>
+                <th scope="col">Amount</th>
+                <th scope="col">Source</th>
+              </tr>
+            </thead>
             <tbody>
               {packet.known_components.map((c, i) => (
                 <tr key={`${c.name}-${i}`}>
-                  <td>{c.name}</td>
+                  <th scope="row">{c.name}</th>
                   <td className="n">{rupees(c.amount_paise)}</td>
                   <td className="src">{c.source}</td>
                 </tr>

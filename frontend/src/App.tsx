@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { Packet, Summary } from "./types";
 import { PacketView } from "./PacketView";
 import { rupees } from "./money";
+import { getJson } from "./api";
 
 const REASONS = [
   "all",
@@ -19,8 +20,7 @@ export function App() {
 
   useEffect(() => {
     const query = reason === "all" ? "" : `?reason_code=${reason}`;
-    fetch(`/api/divergences${query}`)
-      .then((r) => r.json())
+    getJson<Summary[]>(`/api/divergences${query}`)
       .then((data: Summary[]) => {
         setRows(data);
         if (data.length > 0 && data[0].served_arm) setArm(data[0].served_arm);
@@ -33,9 +33,7 @@ export function App() {
       setPacket(null);
       return;
     }
-    fetch(`/api/divergences/${selected}`)
-      .then((r) => r.json())
-      .then(setPacket);
+    getJson<Packet>(`/api/divergences/${selected}`).then(setPacket);
   }, [selected]);
 
   return (

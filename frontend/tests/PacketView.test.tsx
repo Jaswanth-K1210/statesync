@@ -1,8 +1,16 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
+import { axe } from "vitest-axe";
+import * as matchers from "vitest-axe/matchers";
 import { PacketView } from "../src/PacketView";
 import { rupees } from "../src/money";
 import type { Packet } from "../src/types";
+
+expect.extend(matchers);
+// vitest-axe 0.1's bundled types target the pre-2.0 `Vi` namespace.
+declare module "vitest" {
+  interface Assertion<T = any> extends matchers.AxeMatchers {}
+}
 
 // Rejected hypotheses are the point of this screen. These tests exist to stop
 // anyone "tidying" them behind a toggle.
@@ -245,5 +253,91 @@ describe("empty candidate lists mean two different things", () => {
     );
     expect(screen.getByText(/Provider returned no candidates/)).toBeDefined();
     expect(screen.queryByText(/Not priced/)).toBeNull();
+  });
+});
+
+describe("coverage gaps", () => {
+  it("marks only the unresolved citation as missing", () => {
+    const { container } = render(
+      <PacketView
+        packet={packet({
+          hypotheses: [
+            hypothesis({
+              citations: [
+                { artifact: "pay_1", resolves: true },
+                { artifact: "rfnd_ghost", resolves: false },
+              ],
+            }),
+          ],
+        })}
+      />,
+    );
+    const missing = container.querySelectorAll(".cite.missing");
+    expect(missing).toHaveLength(1);
+    expect(missing[0].textContent).toContain("rfnd_ghost");
+    expect(missing[0].textContent).toContain("unresolved");
+  });
+
+  it("shows a rejected hypothesis with its reason, no match and no citation", () => {
+    render(
+      <PacketView
+        packet={packet({
+          hypotheses: [
+            hypothesis({
+              verdict: "ARTIFACT_MISSING",
+              citations: [],
+              rejection_reason: "cites nothing that exists",
+            }),
+          ],
+        })}
+      />,
+    );
+    const card = screen.getByTestId("hypothesis");
+    expect(card.className).not.toContain("verified");
+    expect(screen.getByText("ARTIFACT_MISSING")).toBeDefined();
+    expect(screen.getByText(/does not match residual/)).toBeDefined();
+    expect(screen.getByText("no citation")).toBeDefined();
+    expect(screen.getByText("cites nothing that exists")).toBeDefined();
+  });
+
+  it("renders an empty packet", () => {
+    render(
+      <PacketView
+        packet={packet({
+          known_components: [],
+          hypotheses: [],
+          residual_paise: 0,
+          suggested_action: "",
+          needed_config: undefined,
+        })}
+      />,
+    );
+    expect(screen.getByText(/Nothing could be priced/)).toBeDefined();
+    expect(screen.getByText(/0 candidates/)).toBeDefined();
+    expect(screen.getByText(/Provider returned no candidates/)).toBeDefined();
+    expect(screen.queryByText(/Needs:/)).toBeNull();
+    expect(screen.getByTestId("residual").textContent).toBe("₹0.00");
+  });
+});
+
+describe("accessibility", () => {
+  it("has no axe violations", async () => {
+    const { container } = render(
+      <PacketView
+        packet={packet({
+          hypotheses: [
+            hypothesis({ label: "H1", verdict: "VERIFIED", matched_residual: true, rejection_reason: "" }),
+            hypothesis({
+              label: "H2",
+              citations: [{ artifact: "rfnd_ghost", resolves: false }],
+            }),
+            hypothesis({ label: "H3", verdict: "ARTIFACT_MISSING", citations: [] }),
+          ],
+        })}
+      />,
+    );
+    // jsdom has no canvas, so axe cannot measure contrast here; check it in a browser.
+    const results = await axe(container, { rules: { "color-contrast": { enabled: false } } });
+    expect(results).toHaveNoViolations();
   });
 });

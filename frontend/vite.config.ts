@@ -3,6 +3,8 @@ import react from "@vitejs/plugin-react";
 
 export default defineConfig({
   plugins: [react()],
+  // Relative asset URLs, so the static build works from any subpath (GitHub Pages).
+  base: "./",
   server: {
     port: 5173,
     strictPort: true,
@@ -18,5 +20,6 @@ export default defineConfig({
     environment: "jsdom",
     globals: true,
     exclude: ["node_modules/**"],
+    coverage: { provider: "v8", include: ["src/**"], reporter: ["text"] },
   },
 });
